@@ -56,7 +56,7 @@ pub use ruby::Ruby;
 pub use value::{BoxValue, ReprValue, StackPinned, Value, ValueType};
 
 // Re-export common types
-pub use types::{Fixnum, Qfalse, Qnil, Qtrue, Symbol};
+pub use types::{Encoding, Fixnum, Qfalse, Qnil, Qtrue, RString, Symbol};
 
 #[cfg(target_pointer_width = "64")]
 pub use types::Flonum;
@@ -71,7 +71,7 @@ pub mod prelude {
     pub use crate::error::{Error, ExceptionClass};
     pub use crate::pin_on_stack;
     pub use crate::ruby::Ruby;
-    pub use crate::types::{Fixnum, Qfalse, Qnil, Qtrue, Symbol};
+    pub use crate::types::{Encoding, Fixnum, Qfalse, Qnil, Qtrue, RString, Symbol};
     pub use crate::value::{BoxValue, ReprValue, StackPinned, Value, ValueType};
 
     #[cfg(target_pointer_width = "64")]

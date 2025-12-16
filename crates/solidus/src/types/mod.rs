@@ -32,10 +32,12 @@
 mod float;
 mod immediate;
 mod integer;
+mod string;
 mod symbol;
 
 pub use immediate::{Qfalse, Qnil, Qtrue};
 pub use integer::{Fixnum, Integer, RBignum};
+pub use string::{Encoding, RString};
 pub use symbol::Symbol;
 
 // Flonum is only available on 64-bit platforms
