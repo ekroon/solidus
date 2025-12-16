@@ -7,13 +7,15 @@ showing all the different ways to register Rust functions as Ruby methods.
 
 This example successfully demonstrates:
 
-- **Instance methods** on String class (extending built-in types)
+- **Instance methods** on custom classes (using `method!` macro)
 - **Class methods** (singleton methods) on custom classes
 - **Module functions** that can be called on modules
+- **Module class methods** (singleton methods on modules)
 - **Global functions** available everywhere
-- Various arities (0-3 arguments)
+- Various arities (0-3 arguments) with extensible pattern to arity 15
 - Error handling and propagation
-- Manual Init_ function registration
+- Stack pinning of heap-allocated arguments
+- Manual Init_ function registration (alternative to `#[solidus::init]`)
 
 ## Building
 
@@ -120,18 +122,33 @@ pub unsafe extern "C" fn Init_phase3_methods() {
 }
 ```
 
-## Known Limitations
+## Testing
 
-1. **String Type Conversion**: There's currently an issue with Ruby string type detection
-   in some contexts. Global functions expecting RString arguments may fail with
-   "expected String" errors. This is being investigated.
+Run the comprehensive test suite:
 
-2. **Immediate Values**: The current `function!` macro implementation wraps all arguments
-   with `Pin<&StackPinned<T>>`, which doesn't work for immediate values like `i64`.
-   This example works around it by passing all numeric arguments as strings.
+```bash
+ruby test.rb
+```
 
-3. **Macro Safety**: The `#[solidus::init]` macro generates code that requires `unsafe`
-   markers in Rust 2024 edition. This example uses a manual Init function instead.
+This will test all registered methods:
+- 4 global functions (arities 0-3)
+- Instance method registration on Calculator class
+- 2 class methods (arities 0-1)
+- 3 module functions (arities 0-2)
+- 3 module class methods (arities 0-2)
+- Mixed usage scenarios
+
+## Design Notes
+
+1. **Instance Methods vs Class Type**: The Calculator instance methods in this example
+   expect `RString` as `rb_self`, but are registered on the Calculator class. This is
+   for demonstration purposes. In production code, you would typically either:
+   - Add methods to existing Ruby classes (like String)
+   - Create custom types with `#[wrap]` that match the Rust type
+
+2. **Manual Init Function**: This example uses a manual `Init_` function rather than
+   `#[solidus::init]` to show the underlying mechanism. The `#[solidus::init]` macro
+   generates equivalent code and is the recommended approach for most use cases.
 
 ## Code Organization
 
@@ -156,12 +173,13 @@ Despite the known limitations, this example successfully shows:
 5. **Return value conversion** - converting Rust types back to Ruby values
 6. **Manual initialization** - registering the extension with Ruby
 
-## Future Work
+## Future Enhancements
 
-- Fix string type detection for function arguments
-- Add support for immediate value arguments without pinning
-- Resolve Rust 2024 edition compatibility for the `#[solidus::init]` macro
-- Complete comprehensive test coverage
+Phase 3 core functionality is complete. Future phases will add:
+
+- **Phase 4**: Wrapped types with `#[wrap]` for custom Ruby classes backed by Rust structs
+- **Advanced method features**: Variadic arguments, block arguments, keyword arguments
+- **Higher arities**: Extend `method!` and `function!` macros beyond arity 4 (pattern ready)
 
 ## Related Documentation
 

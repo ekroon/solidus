@@ -25,14 +25,27 @@
 //! - [`Ruby`] - Handle to the Ruby VM
 //! - [`Error`] - Ruby exception wrapper
 //!
-//! # Example
+//! # Method Registration
+//!
+//! Solidus provides `method!` and `function!` macros for registering Rust functions as Ruby methods:
 //!
 //! ```ignore
 //! use solidus::prelude::*;
 //!
+//! // Define a Ruby method
 //! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
 //!     // `other` is guaranteed to be on the stack - enforced by the type system
-//!     rb_self.concat(other.get())
+//!     let other_str = other.get().to_string()?;
+//!     let self_str = rb_self.to_string()?;
+//!     RString::new(&format!("{}{}", self_str, other_str))
+//! }
+//!
+//! // Initialize the extension
+//! #[solidus::init]
+//! fn init(ruby: &Ruby) -> Result<(), Error> {
+//!     let class = ruby.define_class("MyString", ruby.class_object())?;
+//!     class.define_method("concat", method!(concat, 1), 1)?;
+//!     Ok(())
 //! }
 //! ```
 
