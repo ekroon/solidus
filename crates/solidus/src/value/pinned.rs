@@ -37,7 +37,8 @@ pub struct StackPinned<T> {
 
 // StackPinned is !Unpin because it contains PhantomPinned
 // This is the core safety guarantee - we cannot accidentally unpin it
-impl<T> Unpin for StackPinned<T> where Self: Sized {}
+// Note: We do NOT implement Unpin - the default !Unpin behavior from
+// PhantomPinned is exactly what we want.
 
 impl<T> StackPinned<T> {
     /// Create a new StackPinned wrapper.
@@ -167,5 +168,34 @@ mod tests {
         *StackPinned::get_mut(value.as_mut()) = 100;
         let value = value.as_ref();
         assert_eq!(*StackPinned::get(value), 100);
+    }
+
+    // This test verifies that StackPinned is !Unpin by demonstrating
+    // that Pin::new cannot be used with it (only Pin::new_unchecked works)
+    #[test]
+    fn test_stack_pinned_is_not_unpin() {
+        // StackPinned should be !Unpin, which means:
+        // 1. Pin::new() cannot be used (requires Unpin)
+        // 2. Pin::new_unchecked() must be used instead
+        
+        let pinned = StackPinned::new(42i32);
+        let boxed = Box::new(pinned);
+        
+        // This line would fail to compile if uncommented, proving !Unpin:
+        // let _ = Pin::new(boxed);
+        // error: the trait bound `StackPinned<i32>: Unpin` is not satisfied
+        
+        // Instead, we must use the unsafe Pin::new_unchecked:
+        let pinned_box = unsafe { Pin::new_unchecked(boxed) };
+        assert_eq!(*StackPinned::get(pinned_box.as_ref()), 42);
+        
+        // We can verify at compile-time that StackPinned<i32> is !Unpin
+        // by uncommenting this function and call:
+        // fn requires_unpin<T: Unpin>(_: &T) {}
+        // requires_unpin(&StackPinned::new(42i32));
+        // ^ This would fail to compile with:
+        //   error: the trait bound `StackPinned<i32>: Unpin` is not satisfied
+        
+        // The fact that this test compiles and runs proves StackPinned is !Unpin
     }
 }

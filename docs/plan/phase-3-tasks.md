@@ -160,11 +160,11 @@ This is the "full form" that gives users complete control.
 
 **File**: `crates/solidus/src/method/mod.rs`
 
-- [ ] Create the `method!` macro for arity 0 (self only)
-- [ ] Handle panic catching with `std::panic::catch_unwind`
-- [ ] Handle error propagation
-- [ ] Convert return value to Ruby VALUE
-- [ ] Add tests
+- [x] Create the `method!` macro for arity 0 (self only)
+- [x] Handle panic catching with `std::panic::catch_unwind`
+- [x] Handle error propagation
+- [x] Convert return value to Ruby VALUE
+- [x] Add tests
 
 ```rust
 /// Usage:
@@ -191,10 +191,10 @@ The macro should generate:
 
 **File**: `crates/solidus/src/method/mod.rs` (extend)
 
-- [ ] Extend `method!` to support arity 1
-- [ ] Stack-pin the argument if it's a heap type
-- [ ] Pass pinned reference to user function
-- [ ] Add tests
+- [x] Extend `method!` to support arity 1
+- [x] Stack-pin the argument if it's a heap type
+- [x] Pass pinned reference to user function
+- [x] Add tests
 
 ```rust
 /// Usage:
@@ -225,10 +225,10 @@ The macro should generate:
 
 **File**: `crates/solidus/src/method/mod.rs` (extend)
 
-- [ ] Extend `method!` to support arity 2
-- [ ] Extend `method!` to support arity 3
-- [ ] Each argument independently pinned
-- [ ] Add tests for various argument combinations
+- [x] Extend `method!` to support arity 2
+- [x] Extend `method!` to support arity 3
+- [x] Each argument independently pinned
+- [x] Add tests for various argument combinations
 
 ### Task 3.2.4: Implement method! macro for arity 4-15
 
@@ -236,9 +236,9 @@ The macro should generate:
 
 Ruby's `rb_define_method` supports up to 15 arguments (or variadic).
 
-- [ ] Use helper macro to reduce repetition
-- [ ] Implement arities 4-15
-- [ ] Test edge cases (max arity)
+- [x] Use helper macro to reduce repetition (arity 4 complete)
+- [~] Implement arities 4-15 (4 complete, 5-15 pending)
+- [x] Test edge cases (arity 4)
 
 ```rust
 // Helper macro to generate arity variants
