@@ -229,3 +229,159 @@ pub extern "C" fn Init_extension_name() {
 - [ ] Panic handling works correctly
 - [ ] Error propagation works correctly
 - [ ] All tests pass
+- [ ] Implicit pinning works without relying on Copy (ADR-007)
+
+## Implicit Pinning Redesign (ADR-007)
+
+**Status**: Design in progress, implementation pending.
+
+The current `#[solidus_macros::method]` and `#[solidus_macros::function]` attribute
+macros rely on VALUE types being `Copy` to provide implicit pinning. This is unsafe
+because copies can escape to the heap.
+
+### Current (Unsafe) Approach
+
+```rust
+#[solidus_macros::method]
+fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+    // `other` appears to be pinned, but since RString is Copy,
+    // user could store `other` in a Vec here - unsafe!
+}
+```
+
+The macro pins the original VALUE, then **copies** it to pass to the user function.
+The user receives an unprotected copy.
+
+### Goal: Implicit Pinning Without Copy
+
+We want to keep the ergonomic API but make it safe:
+
+```rust
+#[solidus_macros::method]
+fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+    // This should be safe even though signature looks simple
+}
+```
+
+### Design Options
+
+#### Option A: Pass by Reference
+
+The macro passes `&T` instead of `T`:
+
+```rust
+// User writes:
+fn concat(rb_self: &RString, other: &RString) -> Result<RString, Error>
+
+// Macro generates wrapper that:
+// 1. Pins values on stack
+// 2. Passes references to pinned values
+```
+
+**Pros**: Simple, idiomatic Rust
+**Cons**: User must use `&T` syntax, can still call `.clone()` if Clone is implemented
+
+#### Option B: Pass Lifetime-Bound Wrapper
+
+Create a newtype that can't escape:
+
+```rust
+/// A reference to a VALUE that is tied to the current stack frame
+pub struct ValueRef<'a, T>(&'a StackPinned<T>);
+
+// User writes:
+fn concat(rb_self: ValueRef<'_, RString>, other: ValueRef<'_, RString>) 
+    -> Result<RString, Error>
+```
+
+**Pros**: Type makes borrowing explicit, can't implement Clone
+**Cons**: More verbose than plain `RString`
+
+#### Option C: Interior Reference Pattern
+
+The macro generates code that passes a short-lived borrow:
+
+```rust
+// User writes (unchanged from current):
+fn concat(rb_self: RString, other: RString) -> Result<RString, Error>
+
+// Macro generates:
+unsafe extern "C" fn wrapper(rb_self: VALUE, arg0: VALUE) -> VALUE {
+    // Pin values
+    let mut self_pinned = StackPinned::new(RString::from_raw(rb_self));
+    let mut arg0_pinned = StackPinned::new(RString::from_raw(arg0));
+    
+    // Create non-Copy handles that borrow from pinned storage
+    let self_ref = RString::borrow_from(&self_pinned);
+    let arg0_ref = RString::borrow_from(&arg0_pinned);
+    
+    concat(self_ref, arg0_ref)
+}
+```
+
+This requires `RString` to have a lifetime parameter or use internal borrows.
+
+**Pros**: Keeps simple `RString` signature
+**Cons**: Complex implementation, may need lifetime parameters on types
+
+#### Option D: Rely on !Copy Alone
+
+Simply making types `!Copy` may be sufficient:
+
+```rust
+// User writes:
+fn concat(rb_self: RString, other: RString) -> Result<RString, Error>
+
+// Since RString is !Copy, moving it into a Vec would move it out of the function.
+// The macro can pass by value if the user function consumes the value.
+```
+
+**Pros**: Simplest implementation
+**Cons**: User can still call `.clone()` if Clone is implemented (but that's expensive and obvious)
+
+### Recommended Approach
+
+**Option A (Pass by Reference)** is recommended:
+
+1. Simplest to implement
+2. Idiomatic Rust - passing `&T` is natural
+3. Users understand that `&T` is borrowed
+4. If types also implement `!Clone` (or have expensive Clone), escape is prevented
+
+The attribute macro would transform:
+
+```rust
+#[solidus_macros::method]
+fn concat(rb_self: &RString, other: &RString) -> Result<RString, Error> {
+    // Safe! Cannot store `other` anywhere - it's a reference
+}
+```
+
+Into:
+
+```rust
+fn concat(rb_self: &RString, other: &RString) -> Result<RString, Error> { ... }
+
+unsafe extern "C" fn concat_wrapper(rb_self: VALUE, arg0: VALUE) -> VALUE {
+    let mut self_pinned = StackPinned::new(RString::from_raw(rb_self));
+    let mut arg0_pinned = StackPinned::new(RString::from_raw(arg0));
+    
+    let result = concat(
+        self_pinned.get_ref(),
+        arg0_pinned.get_ref(),
+    );
+    // ... handle result
+}
+```
+
+### Implementation Plan
+
+See [phase-3-tasks.md](phase-3-tasks.md#stage-3-ergonomic-method-macro-implicit-pinning)
+for updated tasks.
+
+### Migration Path
+
+1. Update Phase 2 types to be `!Copy` (see phase-2-tasks.md Stage 10)
+2. Update attribute macros to pass `&T` instead of `T`
+3. Update existing examples and tests
+4. Document the new pattern

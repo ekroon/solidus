@@ -289,6 +289,88 @@ pub trait IntoValue {
 - [ ] Implement for collections
 - [ ] Add tests
 
+## Pinned-From-Creation Changes (ADR-007)
+
+**Status**: Design accepted, implementation pending.
+
+A critical design flaw was identified that requires changes to all VALUE wrapper types.
+See [decisions.md](decisions.md#adr-007-values-must-be-pinned-from-creation) for full context.
+
+### Summary
+
+The current implementation derives `Copy` on all VALUE types:
+
+```rust
+// CURRENT (unsafe - allows heap escape)
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct RString(Value);
+```
+
+This is unsafe because users can copy VALUEs to heap storage (Vec, Box, etc.),
+making them invisible to Ruby's GC.
+
+### Required Changes
+
+#### 1. Remove `Copy` from VALUE Types
+
+All heap-allocated VALUE types must NOT implement `Copy`:
+
+```rust
+// NEW (safe - prevents heap escape)
+#[derive(Clone)]  // Clone only, NOT Copy
+#[repr(transparent)]
+pub struct RString(Value);
+```
+
+Affected types:
+- `RString`
+- `RArray`
+- `RHash`
+- `RBignum`
+- `RFloat`
+- `RClass`
+- `RModule`
+- `Integer` (can contain Bignum)
+- `Float` (can contain RFloat)
+- `Value` (the base type)
+
+**Note**: Immediate types (`Fixnum`, `Symbol`, `Qnil`, `Qtrue`, `Qfalse`, `Flonum`)
+can remain `Copy` as they don't require GC protection.
+
+#### 2. Redesign Creation APIs
+
+Creation functions should enforce immediate pinning. Options:
+
+**Option A: Macro-based creation**
+```rust
+pin_on_stack!(s = RString::new("hello")?);
+// s is Pin<&StackPinned<RString>>
+```
+
+**Option B: Builder pattern with pinning**
+```rust
+let builder = RString::builder("hello")?;
+pin_on_stack!(s = builder);  // Consumes builder
+```
+
+**Option C: Creation takes output location**
+```rust
+let mut slot = MaybeUninit::<StackPinned<RString>>::uninit();
+let s = RString::new_in(&mut slot, "hello")?;
+// s is Pin<&StackPinned<RString>>
+```
+
+#### 3. Update Code Examples
+
+All code examples in this document showing `#[derive(Clone, Copy)]` need to be
+updated to show `#[derive(Clone)]` only.
+
+### Implementation
+
+See [phase-2-tasks.md](phase-2-tasks.md#stage-10-pinned-from-creation-changes) for
+the detailed task breakdown.
+
 ## Acceptance Criteria
 
 - [ ] All major Ruby types have Rust wrappers
@@ -296,3 +378,5 @@ pub trait IntoValue {
 - [ ] Immediate values can be used without pinning
 - [ ] Heap values require pinning in method signatures
 - [ ] Comprehensive test coverage
+- [ ] VALUE types are `!Copy` (ADR-007)
+- [ ] Creation APIs enforce immediate pinning (ADR-007)

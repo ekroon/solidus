@@ -257,10 +257,14 @@ macro_rules! impl_method_arity {
 
 Add support for simpler signatures where the macro handles pinning internally.
 
+**Note (ADR-007)**: The original design relied on VALUE types being `Copy`, which is
+unsafe. This stage has been redesigned to work with `!Copy` types by passing references.
+
 ### Task 3.3.1: Design implicit pinning API
 
 - [x] Design how users specify simple signatures
 - [x] Decide on macro syntax for implicit vs explicit
+- [ ] **UPDATE (ADR-007)**: Redesign for `!Copy` types using references
 
 Option A: Separate macro names
 ```rust
@@ -289,9 +293,16 @@ fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
 }
 ```
 
-**Recommended**: Option B - the macro always pins heap types internally, users
-write simple signatures. The explicit `Pin<&StackPinned<T>>` form is still
-supported for users who want to make pinning visible in their API.
+**Original recommendation**: Option B - the macro always pins heap types internally.
+
+**NEW recommendation (ADR-007)**: Option C with **reference parameters**:
+```rust
+#[solidus::method]
+fn concat(rb_self: &RString, other: &RString) -> Result<RString, Error> {
+    // References ensure values can't escape to heap
+    // Macro pins values and passes references
+}
+```
 
 ### Task 3.3.2: Implement implicit pinning in method! macro
 
@@ -303,7 +314,9 @@ supported for users who want to make pinning visible in their API.
 - [x] Support for explicit `Pin<&StackPinned<T>>` signatures (backward compatibility)
 - [x] Document the implicit pinning behavior
 - [x] Add tests
+- [ ] **UPDATE (ADR-007)**: Remove Copy bound, pass `&T` instead of `T`
 
+**Current implementation** (unsafe with Copy types):
 ```rust
 /// With implicit pinning:
 /// fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
@@ -328,6 +341,30 @@ supported for users who want to make pinning visible in their API.
 /// }
 ```
 
+**NEW implementation (ADR-007)** - pass references instead of copies:
+```rust
+/// With implicit pinning (reference-based):
+/// fn concat(rb_self: &RString, other: &RString) -> Result<RString, Error> {
+///     // `other` is a reference to a pinned value - cannot escape
+/// }
+///
+/// Generated wrapper:
+/// unsafe extern "C" fn wrapper(rb_self: VALUE, arg0: VALUE) -> VALUE {
+///     let result = std::panic::catch_unwind(|| {
+///         let self_converted = RString::from_raw(rb_self);
+///         let arg0_converted = RString::from_raw(arg0);
+///         
+///         // Pin both values on stack
+///         let mut self_pinned = StackPinned::new(self_converted);
+///         let mut arg0_pinned = StackPinned::new(arg0_converted);
+///         
+///         // Pass references to pinned values
+///         concat(self_pinned.get_ref(), arg0_pinned.get_ref())
+///     });
+///     // ...
+/// }
+```
+
 ### Task 3.3.3: Support mixed immediate/heap arguments
 
 **File**: `crates/solidus-macros/src/lib.rs` (attribute macro)
@@ -335,16 +372,51 @@ supported for users who want to make pinning visible in their API.
 - [x] Immediate arguments passed directly (no pinning overhead)
 - [x] Heap arguments pinned automatically
 - [x] Works for any combination of explicit Pin and implicit types
+- [ ] **UPDATE (ADR-007)**: Heap arguments passed as `&T`
 
 ```rust
-/// Mixed arguments example:
-/// fn insert(rb_self: RArray, index: i64, value: RString) -> Result<RArray, Error> {
+/// Mixed arguments example (ADR-007):
+/// fn insert(rb_self: &RArray, index: i64, value: &RString) -> Result<&RArray, Error> {
 ///     // index is i64 (immediate) - passed directly
-///     // value is RString (heap) - pinned by wrapper
+///     // value is &RString (heap) - reference to pinned value
 /// }
 ```
 
-**Acceptance**: Implicit pinning works for arities 0-2 with mixed argument types, extensible pattern for higher arities
+### Task 3.3.4: Update #[function] attribute macro (ADR-007)
+
+**File**: `crates/solidus-macros/src/lib.rs`
+
+- [ ] Update `#[function]` to use reference-based approach
+- [ ] Remove Copy bound requirement
+- [ ] Update tests
+
+```rust
+#[solidus_macros::function]
+fn greet(name: &RString) -> Result<RString, Error> {
+    // name is a reference - safe
+}
+```
+
+### Task 3.3.5: Update phase3_attr_macros example (ADR-007)
+
+**Directory**: `examples/phase3_attr_macros/`
+
+- [ ] Update example to use `&T` signatures
+- [ ] Update test.rb
+- [ ] Update README.md
+
+### Task 3.3.6: Remove Copy bound compile_fail tests (ADR-007)
+
+**File**: `crates/solidus-macros/src/lib.rs`
+
+The current compile_fail doctest verifies that implicit pinning requires Copy.
+With the new design, this test is no longer relevant.
+
+- [ ] Remove or update the compile_fail doctest
+- [ ] Add new tests verifying reference-based approach
+
+**Acceptance**: Implicit pinning works for arities 0-2 with mixed argument types,
+extensible pattern for higher arities. Types are `!Copy` and passed by reference.
 
 ---
 
@@ -790,6 +862,7 @@ From `phase-3-methods.md`:
 - [x] `function!` works for arities 0-4 (0-15 possible via same pattern)
 - [x] Mixed pinned/non-pinned arguments work (implicit via Pin<&StackPinned<T>>)
 - [x] Implicit pinning provides ergonomic API (via #[method] and #[function] attribute macros)
+- [ ] **UPDATE (ADR-007)**: Implicit pinning uses references instead of Copy
 - [ ] Variadic arguments supported (deferred to future work)
 - [ ] Block arguments supported (deferred to future work)
 - [ ] Keyword arguments supported (deferred to future work)

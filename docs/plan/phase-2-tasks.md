@@ -635,6 +635,129 @@ These can be deferred to later phases if needed.
 
 ---
 
+## Stage 10: Pinned-From-Creation Changes (ADR-007)
+
+This stage implements the design changes required by ADR-007 to prevent VALUE
+heap escape. See [decisions.md](decisions.md#adr-007-values-must-be-pinned-from-creation).
+
+### Task 2.10.1: Remove Copy from VALUE wrapper types
+
+**Files**: All type files in `crates/solidus/src/types/`
+
+- [ ] Remove `Copy` from `Value` in `value/mod.rs`
+- [ ] Remove `Copy` from `RString` in `types/string.rs`
+- [ ] Remove `Copy` from `RArray` in `types/array.rs`
+- [ ] Remove `Copy` from `RHash` in `types/hash.rs`
+- [ ] Remove `Copy` from `RBignum` in `types/integer.rs`
+- [ ] Remove `Copy` from `Integer` enum in `types/integer.rs`
+- [ ] Remove `Copy` from `RFloat` in `types/float.rs`
+- [ ] Remove `Copy` from `Float` enum in `types/float.rs`
+- [ ] Remove `Copy` from `RClass` in `types/class.rs`
+- [ ] Remove `Copy` from `RModule` in `types/module.rs`
+- [ ] Fix all compilation errors that result from removing `Copy`
+- [ ] Update tests
+
+**Note**: Keep `Copy` on immediate types: `Fixnum`, `Symbol`, `Qnil`, `Qtrue`, `Qfalse`, `Flonum`.
+
+### Task 2.10.2: Design and implement pinned creation API
+
+**File**: New file `crates/solidus/src/value/creation.rs` or extend existing files
+
+Choose one of these approaches:
+
+**Option A: Macro-based creation (recommended)**
+```rust
+/// Create a new RString, pinning it on the stack
+/// pin_on_stack!(s = RString::new("hello")?);
+/// 
+/// The macro expands to:
+/// let __tmp = RString::new("hello")?;
+/// let mut __pinned = StackPinned::new(__tmp);
+/// let s = Pin::new(&mut __pinned);
+```
+
+- [ ] Update `pin_on_stack!` macro to support creation expressions
+- [ ] Add `pin_on_stack!` examples to all creation methods
+- [ ] Document the pattern
+
+**Option B: Creation returns PinGuard**
+```rust
+/// A guard that holds an unpinned VALUE and must be consumed by pinning
+pub struct PinGuard<T: ReprValue>(T);
+
+impl<T: ReprValue> PinGuard<T> {
+    /// Pin this guard on the stack
+    /// SAFETY: Must be called immediately, value must not escape
+    pub unsafe fn pin(self) -> T { self.0 }
+}
+
+impl RString {
+    pub fn new(s: &str) -> Result<PinGuard<RString>, Error>;
+}
+```
+
+- [ ] Create `PinGuard<T>` type
+- [ ] Update all creation functions to return `PinGuard<T>`
+- [ ] Update `pin_on_stack!` to accept `PinGuard<T>`
+
+### Task 2.10.3: Update BoxValue for !Copy types
+
+**File**: `crates/solidus/src/value/boxed.rs`
+
+- [ ] Ensure `BoxValue::new()` works with `!Copy` types
+- [ ] Add `BoxValue::from_pinned()` to convert pinned refs to boxed
+- [ ] Update documentation with heap storage patterns
+- [ ] Add tests
+
+```rust
+impl<T: ReprValue> BoxValue<T> {
+    /// Create a new BoxValue from a pinned reference
+    /// This is the safe way to move a VALUE to the heap
+    pub fn from_pinned(pinned: Pin<&StackPinned<T>>) -> Self;
+}
+```
+
+### Task 2.10.4: Update TryConvert for !Copy types
+
+**File**: `crates/solidus/src/convert/try_convert.rs`
+
+- [ ] Ensure `TryConvert` works correctly with `!Copy` types
+- [ ] Consider if `TryConvert` should return pinned types
+- [ ] Update any implementations that assume `Copy`
+- [ ] Add tests
+
+### Task 2.10.5: Update IntoValue for !Copy types
+
+**File**: `crates/solidus/src/convert/into_value.rs`
+
+- [ ] Ensure `IntoValue` works correctly with `!Copy` types
+- [ ] `IntoValue::into_value(self)` consumes self, which is fine for `!Copy`
+- [ ] Add implementations for `&T` and `Pin<&StackPinned<T>>` if needed
+- [ ] Add tests
+
+### Task 2.10.6: Update all examples
+
+**Directory**: `examples/`
+
+- [ ] Update `phase2_string` example for !Copy RString
+- [ ] Update `phase2_array` example for !Copy RArray
+- [ ] Update `phase2_hash` example for !Copy RHash
+- [ ] Update `phase2_numeric_heap` example for !Copy Integer/Float
+- [ ] Update `phase2_class_module` example for !Copy RClass/RModule
+- [ ] Update `phase2_conversions` example
+
+### Task 2.10.7: Update documentation
+
+- [ ] Update `phase-2-types.md` code examples (remove Copy from derives)
+- [ ] Update doc comments on all affected types
+- [ ] Add section on VALUE creation and pinning patterns
+- [ ] Update README if needed
+
+**Acceptance**: All VALUE types are `!Copy`, creation APIs enforce pinning,
+`BoxValue<T>` is the only way to store VALUEs on the heap.
+
+---
+
 ## Notes
 
 ### Ruby C API Functions Reference
