@@ -38,7 +38,7 @@ Phase 2 progress (see [phase-2-tasks.md](docs/plan/phase-2-tasks.md) for detaile
 - Stage 2: Immediate Types (Complete) - `Qnil`, `Qtrue`, `Qfalse`, `Fixnum`, `Symbol`, `Flonum`
 - Stage 3: Numeric Types (Complete) - `RBignum`, `Integer`, `RFloat`, `Float` with full conversions
 - Stage 4: String Type (Complete) - `RString` with encoding support and `Encoding` type
-- Stage 5: Array Type (Pending)
+- Stage 5: Array Type (Complete) - `RArray` with push/pop/entry/store/each and Vec conversions
 - Stage 6: Hash Type (Pending)
 - Stage 7: Class and Module Types (Pending)
 - Stage 8: Additional Types (Pending)

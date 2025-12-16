@@ -55,7 +55,10 @@ impl RString {
     pub fn from_slice(bytes: &[u8]) -> Self {
         // SAFETY: rb_str_new creates a new Ruby string with the given bytes
         let val = unsafe {
-            rb_sys::rb_str_new(bytes.as_ptr() as *const std::os::raw::c_char, bytes.len() as _)
+            rb_sys::rb_str_new(
+                bytes.as_ptr() as *const std::os::raw::c_char,
+                bytes.len() as _,
+            )
         };
         // SAFETY: rb_str_new returns a valid VALUE
         RString(unsafe { Value::from_raw(val) })
