@@ -32,15 +32,30 @@ Magnus documents this limitation but cannot prevent it at compile time.
 
 ### How Solidus Prevents This
 
-Solidus uses `Pin<&StackPinned<T>>` to prevent heap allocation:
+Solidus enforces that **all VALUEs are pinned from the moment of creation** (see ADR-007).
+This is achieved through:
+
+1. **VALUE types are `!Copy`**: `RString`, `RArray`, etc. cannot be copied to heap
+2. **Creation returns pinned types**: Values must be pinned immediately after creation
+3. **Explicit `BoxValue<T>` for heap storage**: GC-registered wrapper required
 
 ```rust
-fn solidus_example(arg: Pin<&StackPinned<RString>>) {
-    // This won't compile - StackPinned<T> is !Unpin
-    // let values: Vec<Pin<&StackPinned<RString>>> = vec![arg];
+fn solidus_example() -> Result<(), Error> {
+    // Values must be pinned from creation
+    pin_on_stack!(s = RString::new("hello")?);
+    
+    // This won't compile - RString is !Copy and s is pinned
+    // let values: Vec<RString> = vec![???];  // No way to get RString out
     
     // To store on heap, you must explicitly use BoxValue
-    let boxed = BoxValue::new(*arg.get());  // Explicit, GC-registered
+    let boxed = BoxValue::new(s);  // Explicit, GC-registered
+    let values: Vec<BoxValue<RString>> = vec![boxed];  // Safe
+    Ok(())
+}
+
+// Method arguments are also pinned
+fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+    // `other` cannot be moved to heap - enforced by type system
 }
 ```
 
@@ -70,6 +85,59 @@ fn store_pinned(arg: Pin<&StackPinned<RString>>) {
 - [ ] Test: Cannot store `Pin<&StackPinned<T>>` in Box
 - [ ] Test: Cannot return `Pin<&StackPinned<T>>` from function
 - [ ] Test: Cannot move `StackPinned<T>` after pinning
+
+### 6.1.1 Pinned-From-Creation Tests (ADR-007)
+
+Tests verifying that VALUEs cannot escape pinning:
+
+```rust
+// tests/compile_fail/value_not_copy.rs
+// VALUE types must not be Copy
+
+use solidus::RString;
+
+fn try_copy_value() {
+    pin_on_stack!(s = RString::new("hello").unwrap());
+    
+    // This should fail - RString is !Copy
+    let copy: RString = *s.get();  // ERROR: cannot move out of pinned reference
+    
+    // This should also fail - cannot store unpinned value
+    let vec: Vec<RString> = vec![];  // Even empty vec of RString should be suspicious
+}
+```
+
+```rust
+// tests/compile_fail/creation_requires_pin.rs
+// Values must be pinned immediately after creation
+
+use solidus::RString;
+
+fn try_store_without_pin() {
+    // This should fail - RString::new returns a type requiring pinning
+    let s = RString::new("hello").unwrap();
+    let vec = vec![s];  // ERROR: cannot store unpinned value
+}
+```
+
+```rust
+// tests/compile_fail/return_value_safety.rs
+// Return values created in function must be pinned
+
+use solidus::RString;
+
+fn create_and_store() -> Vec<RString> {
+    pin_on_stack!(s = RString::new("hello").unwrap());
+    // ERROR: cannot move pinned value into Vec
+    vec![s]  
+}
+```
+
+- [ ] Test: VALUE types are `!Copy`
+- [ ] Test: Cannot store VALUE without pinning first
+- [ ] Test: Cannot move pinned VALUE into collection
+- [ ] Test: Creation returns type requiring immediate pinning
+- [ ] Test: Return values from functions stay pinned until return
 
 ### 6.2 Runtime Safety Tests
 
@@ -142,22 +210,34 @@ Side-by-side comparison with Magnus (documentation purposes):
 /// 
 /// In Magnus, you could write:
 /// ```ignore
-/// fn magnus_example(s: RString) {
-///     let vec = vec![s];  // Compiles but is UB
+/// fn magnus_example(ruby: &Ruby) {
+///     let s = ruby.str_new("hello");
+///     let vec = vec![s];  // Compiles but is UB - VALUE on heap
 /// }
 /// ```
 /// 
-/// In Solidus, the equivalent is a compile error:
+/// In Solidus, VALUEs must be pinned from creation:
 /// ```compile_fail
-/// fn solidus_example(s: Pin<&StackPinned<RString>>) {
-///     let vec = vec![s];  // Does not compile
+/// fn solidus_example() {
+///     // RString::new() returns a type that must be immediately pinned
+///     let s = RString::new("hello").unwrap();
+///     let vec = vec![s];  // Does not compile - must pin first
 /// }
 /// ```
 /// 
-/// To store values, Solidus requires explicit BoxValue:
+/// Even after pinning, you cannot move to heap:
+/// ```compile_fail
+/// fn solidus_pinned() {
+///     pin_on_stack!(s = RString::new("hello").unwrap());
+///     let vec = vec![s];  // Does not compile - cannot move pinned value
+/// }
 /// ```
-/// fn solidus_safe(s: Pin<&StackPinned<RString>>) {
-///     let boxed = BoxValue::new(*s.get());
+/// 
+/// To store values on heap, Solidus requires explicit BoxValue:
+/// ```
+/// fn solidus_safe() {
+///     pin_on_stack!(s = RString::new("hello").unwrap());
+///     let boxed = BoxValue::new(s);  // Explicit GC registration
 ///     let vec = vec![boxed];  // Safe: GC-registered
 /// }
 /// ```

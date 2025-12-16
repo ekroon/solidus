@@ -72,5 +72,49 @@ All core acceptance criteria met:
 - Comprehensive test coverage (192+ tests pass with Ruby)
 - Complete phase3_methods example demonstrating all features
 
+## Design Change: Pinned-From-Creation (ADR-007)
+
+**Date**: 2025-12-16
+
+A critical design flaw was identified in the implicit pinning approach used by the
+`#[solidus_macros::method]` and `#[solidus_macros::function]` attribute macros.
+
+### Problem
+
+The implicit pinning feature relied on VALUE types being `Copy`. The macro would:
+1. Pin the original VALUE on the wrapper's stack
+2. Copy the VALUE to pass to the user function
+
+However, since the user receives a `Copy` of the VALUE, they can store that copy
+anywhere (Vec, Box, etc.), defeating the pinning protection. The pinned original
+doesn't protect the escaped copy.
+
+See: https://github.com/matsadler/magnus/issues/101 for background discussion.
+
+### Solution (ADR-007)
+
+**All Ruby VALUEs must be pinned from the moment of creation in Rust.**
+
+This requires:
+1. VALUE types (`RString`, `RArray`, etc.) must be `!Copy`
+2. Creation functions must return types that enforce immediate pinning
+3. `BoxValue<T>` is the only way to store VALUEs on the heap
+4. Return values must remain pinned until returned to Ruby
+
+### Impact on Current Implementation
+
+The following changes are needed:
+- **Phase 2 (Types)**: Remove `Copy` from all VALUE wrapper types
+- **Phase 3 (Methods)**: Reconsider/remove implicit pinning feature
+- **New work**: Redesign creation APIs to enforce immediate pinning
+
+This is a **breaking change** from the current implementation. The existing code
+compiles but has the safety gap described above.
+
+### Status
+
+Design accepted. Implementation pending. See [decisions.md](docs/plan/decisions.md)
+for the full ADR.
+
 <!-- Add any relevant notes about progress, blockers, or decisions here -->
 

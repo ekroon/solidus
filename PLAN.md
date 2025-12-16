@@ -21,20 +21,33 @@ Users must manually ensure values stay on the stack, which is:
 
 ### The Solution
 
-Solidus uses Rust's `Pin` type to enforce stack locality at compile time:
+Solidus enforces that **all Ruby VALUEs are pinned from the moment of creation**.
+This is achieved through:
+
+1. **VALUE types are `!Copy`**: Users cannot accidentally copy VALUEs to heap storage
+2. **Creation returns pinned types**: `RString::new()` etc. return types that must be pinned
+3. **Explicit `BoxValue<T>` for heap storage**: GC-registered wrapper for heap allocation
 
 ```rust
-// Method arguments are automatically stack-pinned
+// Values must be pinned from creation
+fn example() -> Result<RString, Error> {
+    pin_on_stack!(s = RString::new("hello")?);
+    // s is Pin<&StackPinned<RString>> - cannot be stored in Vec
+    
+    // To store on heap, explicit BoxValue required
+    let boxed = BoxValue::new(s);  // GC-registered, safe to store
+    
+    Ok(s.into_value())  // Return pinned value to Ruby
+}
+
+// Method arguments are also pinned
 fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
     // `other` cannot be moved to heap - enforced by type system
 }
-
-// Explicit opt-in for heap allocation
-fn store(arr: Pin<&StackPinned<RArray>>) -> Result<(), Error> {
-    let boxed: BoxValue<RString> = BoxValue::new(arr.get().entry(0)?);  // GC-registered
-    // boxed can safely be stored in Vec, HashMap, etc.
-}
 ```
+
+See [ADR-007](docs/plan/decisions.md#adr-007-values-must-be-pinned-from-creation) for
+the full rationale.
 
 ## Phases Overview
 
@@ -47,6 +60,28 @@ fn store(arr: Pin<&StackPinned<RArray>>) -> Result<(), Error> {
 | 4 | [TypedData](docs/plan/phase-4-typed-data.md) | #[wrap], TypedData for Rust types in Ruby |
 | 5 | [Polish](docs/plan/phase-5-polish.md) | Documentation, examples, testing |
 | 6 | [Safety Validation](docs/plan/phase-6-safety-validation.md) | Tests confirming we prevent Magnus's UB |
+
+## Critical Safety Requirements
+
+### Pinned-From-Creation (ADR-007)
+
+All Ruby VALUE wrapper types must be pinned from the moment they are created in Rust.
+This is a **breaking change** from the current implementation that requires:
+
+1. **Remove `Copy` from VALUE types**: `RString`, `RArray`, `RHash`, `Value`, etc.
+   must not implement `Copy`.
+
+2. **Redesign creation APIs**: Functions like `RString::new()` must return a type
+   that enforces immediate pinning (e.g., a guard type consumed by `pin_on_stack!`).
+
+3. **Return value handling**: The method wrapper macros must ensure return values
+   are pinned on the wrapper's stack until returned to Ruby.
+
+4. **Reconsider implicit pinning**: The `#[solidus_macros::method]` implicit pinning
+   feature may need to be removed or redesigned, as it relies on `Copy` semantics.
+
+**Status**: Design accepted, implementation pending. See Phase 2 and 3 task files
+for detailed implementation work.
 
 ## Architecture Decisions
 
