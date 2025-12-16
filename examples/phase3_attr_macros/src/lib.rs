@@ -88,6 +88,37 @@
 //!     Ok(RString::new(&format!("Hello, {}!", name.to_string()?)))
 //! }
 //! ```
+//!
+//! ## Implicit Pinning Requires Copy
+//!
+//! The implicit pinning mechanism requires that argument types implement `Copy`.
+//! This is enforced at compile time. If you try to use a non-Copy type with
+//! implicit pinning, you'll get a compile error:
+//!
+//! ```compile_fail,E0277
+//! use solidus::prelude::*;
+//!
+//! // A non-Copy wrapper type
+//! struct NonCopyWrapper(RString);
+//!
+//! impl solidus::convert::TryConvert for NonCopyWrapper {
+//!     fn try_convert(val: Value) -> Result<Self, Error> {
+//!         Ok(NonCopyWrapper(RString::try_convert(val)?))
+//!     }
+//! }
+//!
+//! // This won't compile because NonCopyWrapper doesn't implement Copy!
+//! // The macro generates code that requires T: Copy for implicit pinning.
+//! #[solidus_macros::function]
+//! fn use_non_copy(arg: NonCopyWrapper) -> Result<i64, Error> {
+//!     //~^ ERROR the trait bound `NonCopyWrapper: Copy` is not satisfied
+//!     Ok(42)
+//! }
+//! ```
+//!
+//! This is intentional: the macro copies the value out of the pinned location,
+//! which is only safe for `Copy` types. For non-Copy types, use explicit
+//! `Pin<&StackPinned<T>>` and access the value by reference via `.get()`.
 
 use solidus::prelude::*;
 use std::pin::Pin;
