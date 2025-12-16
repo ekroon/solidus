@@ -316,10 +316,10 @@ macro_rules! method {
 /// ```
 #[macro_export]
 macro_rules! function {
-    // Arity 0 - no arguments
+    // Arity 0 - no arguments (but still receives self from Ruby)
     ($func:path, 0) => {{
         #[allow(unused_unsafe)]
-        unsafe extern "C" fn wrapper() -> $crate::rb_sys::VALUE {
+        unsafe extern "C" fn wrapper(_rb_self: $crate::rb_sys::VALUE) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
                 let result = $func();
 
@@ -337,10 +337,13 @@ macro_rules! function {
         unsafe { ::std::mem::transmute(wrapper as usize) }
     }};
 
-    // Arity 1 - 1 argument
+    // Arity 1 - 1 argument (plus self from Ruby)
     ($func:path, 1) => {{
         #[allow(unused_unsafe)]
-        unsafe extern "C" fn wrapper(arg0: $crate::rb_sys::VALUE) -> $crate::rb_sys::VALUE {
+        unsafe extern "C" fn wrapper(
+            _rb_self: $crate::rb_sys::VALUE,
+            arg0: $crate::rb_sys::VALUE,
+        ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
@@ -362,10 +365,11 @@ macro_rules! function {
         unsafe { ::std::mem::transmute(wrapper as usize) }
     }};
 
-    // Arity 2 - 2 arguments
+    // Arity 2 - 2 arguments (plus self from Ruby)
     ($func:path, 2) => {{
         #[allow(unused_unsafe)]
         unsafe extern "C" fn wrapper(
+            _rb_self: $crate::rb_sys::VALUE,
             arg0: $crate::rb_sys::VALUE,
             arg1: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
@@ -394,10 +398,11 @@ macro_rules! function {
         unsafe { ::std::mem::transmute(wrapper as usize) }
     }};
 
-    // Arity 3 - 3 arguments
+    // Arity 3 - 3 arguments (plus self from Ruby)
     ($func:path, 3) => {{
         #[allow(unused_unsafe)]
         unsafe extern "C" fn wrapper(
+            _rb_self: $crate::rb_sys::VALUE,
             arg0: $crate::rb_sys::VALUE,
             arg1: $crate::rb_sys::VALUE,
             arg2: $crate::rb_sys::VALUE,
@@ -431,10 +436,11 @@ macro_rules! function {
         unsafe { ::std::mem::transmute(wrapper as usize) }
     }};
 
-    // Arity 4 - 4 arguments
+    // Arity 4 - 4 arguments (plus self from Ruby)
     ($func:path, 4) => {{
         #[allow(unused_unsafe)]
         unsafe extern "C" fn wrapper(
+            _rb_self: $crate::rb_sys::VALUE,
             arg0: $crate::rb_sys::VALUE,
             arg1: $crate::rb_sys::VALUE,
             arg2: $crate::rb_sys::VALUE,
