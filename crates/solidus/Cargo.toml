@@ -1,0 +1,21 @@
+[package]
+name = "solidus"
+description = "A safe Rust library for writing Ruby extensions with automatic stack pinning"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+rb-sys.workspace = true
+solidus-macros.workspace = true
+
+[build-dependencies]
+rb-sys-env = "0.1"
+
+[features]
+default = []
+embed = ["rb-sys/ruby-static", "rb-sys/link-ruby"]

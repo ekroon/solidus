@@ -1,0 +1,27 @@
+# Generated files
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ruby build artifacts
+*.bundle
+*.so
+*.dll
+tmp/
+pkg/
+
+# Documentation build
+/doc/
+
+# Test artifacts
+*.log

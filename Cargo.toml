@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/solidus", "crates/solidus-macros"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/ekroon/solidus"
+keywords = ["ruby", "extension", "ffi", "bindings"]
+categories = ["api-bindings", "development-tools::ffi"]
+
+[workspace.dependencies]
+solidus = { path = "crates/solidus" }
+solidus-macros = { path = "crates/solidus-macros" }
+rb-sys = "0.9"

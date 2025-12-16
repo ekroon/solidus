@@ -17,7 +17,6 @@ Set up the project scaffolding, CI pipeline, and basic documentation structure.
 ### 0.2 Licensing
 
 - [ ] Create `LICENSE-MIT`
-- [ ] Create `LICENSE-APACHE`
 - [ ] Add license headers to Cargo.toml files
 
 ### 0.3 Documentation Structure
@@ -59,7 +58,6 @@ solidus/
 ├── .gitignore
 ├── Cargo.toml
 ├── LICENSE-MIT
-├── LICENSE-APACHE
 ├── README.md
 ├── AGENTS.md
 ├── PLAN.md

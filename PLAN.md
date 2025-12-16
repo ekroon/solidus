@@ -82,7 +82,6 @@ solidus/
 ├── Cargo.toml                    # Workspace root
 ├── README.md
 ├── LICENSE-MIT
-├── LICENSE-APACHE
 ├── .github/
 │   └── workflows/
 │       └── ci.yml
