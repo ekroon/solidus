@@ -121,7 +121,25 @@ starting work to understand the current state without needing to analyze all pha
 
 - Update `PROGRESS.md` when completing a phase
 - Individual phase details are in `docs/plan/phase-*.md`
+- **Task breakdowns** are in `docs/plan/phase-*-tasks.md` files
 - See `PLAN.md` for the overall implementation plan
+
+## Task Files
+
+Complex phases have separate task files with step-by-step implementation guides:
+
+| Phase | Task File | Description |
+|-------|-----------|-------------|
+| 2 | [phase-2-tasks.md](docs/plan/phase-2-tasks.md) | Ruby types implementation in 9 stages |
+
+Task files contain:
+- Ordered tasks with dependencies
+- Code snippets and API designs
+- Ruby C API function references
+- Acceptance criteria for each stage
+
+When working on a phase, **always check for a corresponding task file** and follow
+the implementation order specified there.
 
 ## References
 

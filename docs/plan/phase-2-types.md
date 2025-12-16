@@ -4,6 +4,21 @@
 
 Implement wrapper types for Ruby's built-in classes.
 
+## Task Breakdown
+
+**See [phase-2-tasks.md](phase-2-tasks.md) for detailed implementation steps.**
+
+The implementation is split into 9 stages:
+1. Conversion traits (`TryConvert`, `IntoValue`)
+2. Immediate types (`Qnil`, `Qtrue`, `Qfalse`, `Fixnum`, `Symbol`, `Flonum`)
+3. Numeric types (`RBignum`, `Integer`, `RFloat`, `Float`)
+4. String type (`RString`)
+5. Array type (`RArray`)
+6. Hash type (`RHash`)
+7. Class and module types (`RClass`, `RModule`)
+8. Additional types (optional: `RRegexp`, `RStruct`, `Proc`, `Range`)
+9. Final integration and documentation
+
 ## Dependencies
 
 - Phase 1 complete
