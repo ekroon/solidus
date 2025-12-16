@@ -388,10 +388,10 @@ Add `define_method` to `RClass`, `RModule`, and `Ruby`.
 
 **File**: `crates/solidus/src/types/module.rs` (extend)
 
-- [ ] Add `define_method` to the `Module` trait
-- [ ] Accept method name and function pointer from `method!` macro
-- [ ] Handle the Ruby C API call to `rb_define_method`
-- [ ] Add tests
+- [x] Add `define_method` to the `Module` trait
+- [x] Accept method name and function pointer from `method!` macro
+- [x] Handle the Ruby C API call to `rb_define_method`
+- [x] Add tests
 
 ```rust
 pub trait Module: ReprValue {
@@ -428,9 +428,9 @@ a generic type or transmute.
 
 **File**: `crates/solidus/src/types/module.rs` (extend)
 
-- [ ] Add `define_singleton_method` (class methods)
-- [ ] Uses `rb_define_singleton_method` under the hood
-- [ ] Add tests
+- [x] Add `define_singleton_method` (class methods)
+- [x] Uses `rb_define_singleton_method` under the hood
+- [x] Add tests
 
 ```rust
 /// Define a singleton (class) method.
@@ -446,9 +446,9 @@ fn define_singleton_method(
 
 **File**: `crates/solidus/src/ruby.rs` (extend)
 
-- [ ] Add `define_global_function` to `Ruby`
-- [ ] Uses `rb_define_global_function`
-- [ ] Add tests
+- [x] Add `define_global_function` to `Ruby`
+- [x] Uses `rb_define_global_function`
+- [x] Add tests
 
 ```rust
 impl Ruby {
@@ -466,9 +466,9 @@ impl Ruby {
 
 **File**: `crates/solidus/src/types/module.rs` (extend)
 
-- [ ] Add `define_module_function` (callable as both Module.func and Module::func)
-- [ ] Uses `rb_define_module_function`
-- [ ] Add tests
+- [x] Add `define_module_function` (callable as both Module.func and Module::func)
+- [x] Uses `rb_define_module_function`
+- [x] Add tests
 
 **Acceptance**: Full method definition API is available
 

@@ -177,25 +177,25 @@ mod tests {
         // StackPinned should be !Unpin, which means:
         // 1. Pin::new() cannot be used (requires Unpin)
         // 2. Pin::new_unchecked() must be used instead
-        
+
         let pinned = StackPinned::new(42i32);
         let boxed = Box::new(pinned);
-        
+
         // This line would fail to compile if uncommented, proving !Unpin:
         // let _ = Pin::new(boxed);
         // error: the trait bound `StackPinned<i32>: Unpin` is not satisfied
-        
+
         // Instead, we must use the unsafe Pin::new_unchecked:
         let pinned_box = unsafe { Pin::new_unchecked(boxed) };
         assert_eq!(*StackPinned::get(pinned_box.as_ref()), 42);
-        
+
         // We can verify at compile-time that StackPinned<i32> is !Unpin
         // by uncommenting this function and call:
         // fn requires_unpin<T: Unpin>(_: &T) {}
         // requires_unpin(&StackPinned::new(42i32));
         // ^ This would fail to compile with:
         //   error: the trait bound `StackPinned<i32>: Unpin` is not satisfied
-        
+
         // The fact that this test compiles and runs proves StackPinned is !Unpin
     }
 }

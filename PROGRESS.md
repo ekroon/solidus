@@ -56,7 +56,7 @@ Phase 3 progress:
 - Stage 2: Basic Method Macro (Complete) - `method!` macro for arities 0-4 with explicit Pin signatures
 - Stage 3: Ergonomic Method Macro (Pending) - Implicit pinning for simpler signatures
 - Stage 4: Function Macro (Complete) - `function!` macro for arities 0-4 without self parameter
-- Stage 5: Method Definition API (Pending) - `define_method` for RClass/RModule, `define_global_function` for Ruby
+- Stage 5: Method Definition API (Complete) - `define_method`, `define_singleton_method`, `define_module_function` for Module trait, `define_global_function` for Ruby
 - Stage 6: Init Macro (Pending) - `#[solidus::init]` attribute macro
 - Stage 7: Variadic Arguments (Pending) - Support for Ruby variadic methods
 - Stage 8: Block Arguments (Pending) - Support for Ruby blocks
