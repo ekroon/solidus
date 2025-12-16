@@ -13,6 +13,6 @@ keywords = ["ruby", "extension", "ffi", "bindings"]
 categories = ["api-bindings", "development-tools::ffi"]
 
 [workspace.dependencies]
-solidus = { path = "crates/solidus" }
-solidus-macros = { path = "crates/solidus-macros" }
+solidus = { path = "crates/solidus", version = "0.1.0" }
+solidus-macros = { path = "crates/solidus-macros", version = "0.1.0" }
 rb-sys = "0.9"
