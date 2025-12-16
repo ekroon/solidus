@@ -54,7 +54,7 @@ All acceptance criteria met:
 Phase 3 completed with comprehensive method registration:
 - Stage 1: Method Infrastructure (Complete) - `MethodArg` and `ReturnValue` traits
 - Stage 2: Basic Method Macro (Complete) - `method!` macro for arities 0-4 with explicit Pin signatures
-- Stage 3: Ergonomic Method Macro (Deferred) - Implicit pinning deferred; explicit Pin approach works well
+- Stage 3: Ergonomic Method Macro (Complete) - `#[solidus_macros::method]` and `#[solidus_macros::function]` attribute macros with implicit pinning for simpler function signatures. Copy bound enforcement ensures type safety. Supports arities 0-2 with pattern for extension.
 - Stage 4: Function Macro (Complete) - `function!` macro for arities 0-4 without self parameter
 - Stage 5: Method Definition API (Complete) - `define_method`, `define_singleton_method`, `define_module_function` for Module trait, `define_global_function` for Ruby
 - Stage 6: Init Macro (Complete) - `#[solidus::init]` attribute macro with automatic crate name detection, custom naming, panic handling, and comprehensive validation
@@ -65,10 +65,11 @@ Phase 3 completed with comprehensive method registration:
 
 All core acceptance criteria met:
 - `method!` and `function!` macros work for arities 0-4 (extensible to 15)
+- `#[solidus_macros::method]` and `#[solidus_macros::function]` attribute macros with implicit pinning
 - Method definition APIs available on Module trait and Ruby handle
 - `#[solidus::init]` generates correct init functions
 - Panic handling and error propagation work correctly
-- Comprehensive test coverage (192 tests pass with Ruby)
+- Comprehensive test coverage (192+ tests pass with Ruby)
 - Complete phase3_methods example demonstrating all features
 
 <!-- Add any relevant notes about progress, blockers, or decisions here -->

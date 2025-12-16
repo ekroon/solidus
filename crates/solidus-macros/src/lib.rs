@@ -3,20 +3,147 @@
 //! This crate provides the following macros:
 //!
 //! - `#[init]` - Mark a function as the Ruby extension entry point
-//! - `#[wrap]` - Derive TypedData implementation for Rust types
+//! - `#[method]` - Generate wrappers for Ruby instance methods
+//! - `#[function]` - Generate wrappers for Ruby global/module functions
+//! - `#[wrap]` - Derive TypedData implementation for Rust types (planned)
 //!
 //! These macros are re-exported by the main `solidus` crate and should not be
 //! used directly.
+//!
+//! # Implicit Pinning
+//!
+//! The `#[method]` and `#[function]` macros support **implicit pinning** for method
+//! arguments. This allows you to write simple function signatures without manually
+//! wrapping types in `Pin<&StackPinned<T>>`:
+//!
+//! ```ignore
+//! // Simple signature with implicit pinning (recommended)
+//! #[solidus::method]
+//! fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+//!     // Use `other` directly
+//! }
+//!
+//! // Explicit pinning (still supported)
+//! #[solidus::method]
+//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+//!     // Must use `other.get()` to access the inner value
+//! }
+//! ```
+//!
+//! ## Copy Requirement for Implicit Pinning
+//!
+//! When using implicit pinning (simple type signatures), the argument types must
+//! implement `Copy`. This is enforced at compile time. All solidus Ruby value types
+//! (`RString`, `RArray`, `Value`, etc.) implement `Copy` since they are just wrappers
+//! around a pointer-sized `VALUE`.
+//!
+//! If you need to work with non-Copy types, use the explicit `Pin<&StackPinned<T>>`
+//! form and access the value by reference via `.get()`.
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Expr, ItemFn, Lit, Meta, Token, parse_macro_input, punctuated::Punctuated};
+use syn::{
+    Expr, FnArg, GenericArgument, ItemFn, Lit, Meta, Pat, PathArguments, Token, Type,
+    parse_macro_input, punctuated::Punctuated,
+};
 
 /// Result type for macro operations.
 type MacroResult<T> = Result<T, syn::Error>;
+
+/// Information about a parsed parameter.
+#[derive(Debug)]
+struct ParamInfo {
+    /// Whether the type is already `Pin<&StackPinned<T>>`
+    is_explicit_pinned: bool,
+    /// The inner type (T if `Pin<&StackPinned<T>>`, or the original type)
+    inner_type: Type,
+}
+
+/// Check if a type is `Pin<&StackPinned<T>>` and extract the inner type T.
+///
+/// Returns `Some(T)` if the type matches `Pin<&StackPinned<T>>`, `None` otherwise.
+fn extract_pinned_inner_type(ty: &Type) -> Option<Type> {
+    // Match: Pin<&StackPinned<T>> or std::pin::Pin<&StackPinned<T>> or ::std::pin::Pin<...>
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+
+    // Get the last segment (should be "Pin")
+    let last_seg = type_path.path.segments.last()?;
+    if last_seg.ident != "Pin" {
+        return None;
+    }
+
+    // Get the generic arguments of Pin<...>
+    let PathArguments::AngleBracketed(pin_args) = &last_seg.arguments else {
+        return None;
+    };
+
+    // Pin should have exactly one type argument
+    let GenericArgument::Type(pin_inner) = pin_args.args.first()? else {
+        return None;
+    };
+
+    // The inner type should be &StackPinned<T>
+    let Type::Reference(ref_type) = pin_inner else {
+        return None;
+    };
+
+    // Get the referenced type (should be StackPinned<T>)
+    let Type::Path(stack_pinned_path) = ref_type.elem.as_ref() else {
+        return None;
+    };
+
+    // Get the last segment (should be "StackPinned")
+    let stack_pinned_seg = stack_pinned_path.path.segments.last()?;
+    if stack_pinned_seg.ident != "StackPinned" {
+        return None;
+    }
+
+    // Get the generic arguments of StackPinned<T>
+    let PathArguments::AngleBracketed(sp_args) = &stack_pinned_seg.arguments else {
+        return None;
+    };
+
+    // Extract T from StackPinned<T>
+    let GenericArgument::Type(inner_type) = sp_args.args.first()? else {
+        return None;
+    };
+
+    Some(inner_type.clone())
+}
+
+/// Parse a function parameter and extract its name and type information.
+fn parse_param(param: &FnArg) -> MacroResult<ParamInfo> {
+    let FnArg::Typed(pat_type) = param else {
+        return Err(syn::Error::new_spanned(
+            param,
+            "expected typed parameter, not self",
+        ));
+    };
+
+    let Pat::Ident(_pat_ident) = pat_type.pat.as_ref() else {
+        return Err(syn::Error::new_spanned(
+            &pat_type.pat,
+            "expected identifier pattern",
+        ));
+    };
+
+    let ty = (*pat_type.ty).clone();
+    let (is_explicit_pinned, inner_type) = if let Some(inner) = extract_pinned_inner_type(&ty) {
+        (true, inner)
+    } else {
+        (false, ty.clone())
+    };
+
+    Ok(ParamInfo {
+        is_explicit_pinned,
+        inner_type,
+    })
+}
 
 /// Marks a function as the Ruby extension entry point.
 ///
@@ -314,4 +441,513 @@ fn validate_name(name: &str) -> MacroResult<()> {
 pub fn wrap(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // TODO: Implement in Phase 4
     item
+}
+
+/// Marks a function as a Ruby instance method.
+///
+/// This attribute macro generates an extern "C" wrapper function and a companion module
+/// containing the arity constant and a `wrapper()` function that returns the function pointer.
+///
+/// The generated wrapper handles:
+/// - Panic catching via `std::panic::catch_unwind`
+/// - Type conversion of `self` via `TryConvert`
+/// - Type conversion and stack pinning of arguments
+/// - Error propagation (converts `Err` to Ruby exceptions)
+/// - Return value conversion via `ReturnValue`
+///
+/// # Arguments
+///
+/// The first parameter must be `self` (the Ruby receiver), and subsequent parameters
+/// are the method arguments.
+///
+/// # Implicit Pinning
+///
+/// The macro supports **implicit pinning** for method arguments. You can write simple
+/// signatures with direct types, and the macro will automatically pin them on the stack
+/// for GC safety:
+///
+/// ```ignore
+/// // Simple (implicit pinning) - recommended!
+/// #[solidus::method]
+/// fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+///     // Use `other` directly as RString
+/// }
+///
+/// // Explicit pinning - still supported for backwards compatibility
+/// #[solidus::method]
+/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+///     // Must use `other.get()` to access the inner value
+/// }
+/// ```
+///
+/// ## Copy Requirement
+///
+/// When using implicit pinning, argument types must implement `Copy`. This is enforced
+/// at compile time. All solidus Ruby value types implement `Copy`. For non-Copy types,
+/// use explicit `Pin<&StackPinned<T>>` signatures.
+///
+/// # Generated Code
+///
+/// For a method like:
+///
+/// ```ignore
+/// #[solidus::method]
+/// fn greet(rb_self: RString) -> Result<RString, Error> {
+///     Ok(rb_self)
+/// }
+/// ```
+///
+/// The macro generates:
+///
+/// ```ignore
+/// fn greet(rb_self: RString) -> Result<RString, Error> {
+///     Ok(rb_self)
+/// }
+///
+/// #[doc(hidden)]
+/// #[allow(non_camel_case_types)]
+/// pub mod __solidus_method_greet {
+///     use super::*;
+///     
+///     pub const ARITY: i32 = 0;
+///     
+///     pub fn wrapper() -> unsafe extern "C" fn() -> solidus::rb_sys::VALUE {
+///         // ... wrapper implementation
+///     }
+/// }
+/// ```
+///
+/// # Example
+///
+/// ```ignore
+/// use solidus::prelude::*;
+///
+/// // Implicit pinning (simple, recommended)
+/// #[solidus::method]
+/// fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+///     let self_str = rb_self.to_string()?;
+///     let other_str = other.to_string()?;
+///     RString::new(&format!("{}{}", self_str, other_str))
+/// }
+///
+/// // Register with Ruby using the generated module:
+/// // class.define_method("concat", __solidus_method_concat::wrapper(), __solidus_method_concat::ARITY)?;
+/// ```
+///
+/// # Supported Arities
+///
+/// Currently supports arities 0-2 (self + 0-2 arguments).
+///
+/// # Safety
+///
+/// The generated wrapper function is marked `unsafe extern "C"` because it interfaces
+/// directly with Ruby's C API. The wrapper handles all safety concerns internally.
+#[proc_macro_attribute]
+pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_fn = parse_macro_input!(item as ItemFn);
+
+    match method_impl(input_fn) {
+        Ok(tokens) => tokens,
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Marks a function as a Ruby module/global function.
+///
+/// This attribute macro is similar to `#[solidus::method]` but for functions that don't
+/// have a `self` parameter. It generates an extern "C" wrapper function and a companion
+/// module containing the arity constant and a `wrapper()` function.
+///
+/// # Arguments
+///
+/// All parameters are method arguments.
+///
+/// # Implicit Pinning
+///
+/// Like `#[solidus::method]`, this macro supports **implicit pinning**. You can write
+/// simple signatures with direct types:
+///
+/// ```ignore
+/// // Simple (implicit pinning) - recommended!
+/// #[solidus::function]
+/// fn greet(name: RString) -> Result<RString, Error> {
+///     RString::new(&format!("Hello, {}!", name.to_string()?))
+/// }
+///
+/// // Explicit pinning - still supported
+/// #[solidus::function]
+/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+///     RString::new(&format!("Hello, {}!", name.get().to_string()?))
+/// }
+/// ```
+///
+/// ## Copy Requirement
+///
+/// When using implicit pinning, argument types must implement `Copy`. This is enforced
+/// at compile time. All solidus Ruby value types implement `Copy`. For non-Copy types,
+/// use explicit `Pin<&StackPinned<T>>` signatures.
+///
+/// # Generated Code
+///
+/// For a function like:
+///
+/// ```ignore
+/// #[solidus::function]
+/// fn add(a: i64, b: i64) -> Result<i64, Error> {
+///     Ok(a + b)
+/// }
+/// ```
+///
+/// The macro generates:
+///
+/// ```ignore
+/// fn add(a: i64, b: i64) -> Result<i64, Error> {
+///     Ok(a + b)
+/// }
+///
+/// #[doc(hidden)]
+/// #[allow(non_camel_case_types)]
+/// pub mod __solidus_function_add {
+///     use super::*;
+///     
+///     pub const ARITY: i32 = 2;
+///     
+///     pub fn wrapper() -> unsafe extern "C" fn() -> solidus::rb_sys::VALUE {
+///         // ... wrapper implementation
+///     }
+/// }
+/// ```
+///
+/// # Example
+///
+/// ```ignore
+/// use solidus::prelude::*;
+///
+/// // Implicit pinning (simple, recommended)
+/// #[solidus::function]
+/// fn greet(name: RString) -> Result<RString, Error> {
+///     let name_str = name.to_string()?;
+///     RString::new(&format!("Hello, {}!", name_str))
+/// }
+///
+/// // Register with Ruby using the generated module:
+/// // ruby.define_global_function("greet", __solidus_function_greet::wrapper(), __solidus_function_greet::ARITY)?;
+/// ```
+///
+/// # Supported Arities
+///
+/// Currently supports arities 0-2.
+///
+/// # Safety
+///
+/// The generated wrapper function is marked `unsafe extern "C"` because it interfaces
+/// directly with Ruby's C API. The wrapper handles all safety concerns internally.
+#[proc_macro_attribute]
+pub fn function(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input_fn = parse_macro_input!(item as ItemFn);
+
+    match function_impl(input_fn) {
+        Ok(tokens) => tokens,
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Implementation of the #[method] attribute macro.
+fn method_impl(input_fn: ItemFn) -> MacroResult<TokenStream> {
+    let fn_name = &input_fn.sig.ident;
+    let module_name = syn::Ident::new(
+        &format!("__solidus_method_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+
+    // Extract parameters
+    let params: Vec<_> = input_fn.sig.inputs.iter().collect();
+
+    // First parameter must be self (the Ruby receiver)
+    if params.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &input_fn.sig,
+            "method must have at least one parameter (self)",
+        ));
+    }
+
+    // Parse all parameters
+    let mut parsed_params = Vec::new();
+    for param in &params {
+        parsed_params.push(parse_param(param)?);
+    }
+
+    // Arity is number of parameters minus self
+    let arity = (params.len() - 1) as i32;
+
+    // Generate the wrapper based on parsed parameters
+    let wrapper_fn = generate_method_wrapper_dynamic(fn_name, &parsed_params)?;
+
+    let expanded = quote! {
+        // Keep the original function
+        #input_fn
+
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        pub mod #module_name {
+            use super::*;
+
+            /// The arity of this method (number of arguments excluding self).
+            pub const ARITY: i32 = #arity;
+
+            /// Returns the extern "C" wrapper function pointer for this method.
+            ///
+            /// This can be passed to `define_method` for Ruby method registration.
+            pub fn wrapper() -> unsafe extern "C" fn() -> solidus::rb_sys::VALUE {
+                #wrapper_fn
+            }
+        }
+    };
+
+    Ok(TokenStream::from(expanded))
+}
+
+/// Implementation of the #[function] attribute macro.
+fn function_impl(input_fn: ItemFn) -> MacroResult<TokenStream> {
+    let fn_name = &input_fn.sig.ident;
+    let module_name = syn::Ident::new(
+        &format!("__solidus_function_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+
+    // Extract parameters
+    let params: Vec<_> = input_fn.sig.inputs.iter().collect();
+
+    // Parse all parameters
+    let mut parsed_params = Vec::new();
+    for param in &params {
+        parsed_params.push(parse_param(param)?);
+    }
+
+    // Arity is number of parameters (no self for functions)
+    let arity = params.len() as i32;
+
+    // Generate the wrapper based on parsed parameters
+    let wrapper_fn = generate_function_wrapper_dynamic(fn_name, &parsed_params)?;
+
+    let expanded = quote! {
+        // Keep the original function
+        #input_fn
+
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        pub mod #module_name {
+            use super::*;
+
+            /// The arity of this function (number of arguments).
+            pub const ARITY: i32 = #arity;
+
+            /// Returns the extern "C" wrapper function pointer for this function.
+            ///
+            /// This can be passed to `define_global_function` or `define_module_function`
+            /// for Ruby function registration.
+            pub fn wrapper() -> unsafe extern "C" fn() -> solidus::rb_sys::VALUE {
+                #wrapper_fn
+            }
+        }
+    };
+
+    Ok(TokenStream::from(expanded))
+}
+
+/// Generate the extern "C" wrapper for a method dynamically based on parsed parameters.
+///
+/// This function generates a wrapper that handles both explicit `Pin<&StackPinned<T>>`
+/// parameters and implicit pinning for simple types.
+fn generate_method_wrapper_dynamic(
+    fn_name: &syn::Ident,
+    params: &[ParamInfo],
+) -> MacroResult<proc_macro2::TokenStream> {
+    let arity = params.len().saturating_sub(1);
+    if arity > 2 {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!(
+                "#[solidus::method] currently supports arities 0-2, got {}. \
+                 For higher arities, use the method! macro directly.",
+                arity
+            ),
+        ));
+    }
+
+    // First param is self (no pinning needed).
+    // DESIGN: The self parameter does not need pinning because:
+    // 1. It comes directly from Ruby (rb_self) and Ruby guarantees the receiver is live
+    //    for the duration of the method call.
+    // 2. The method dispatch itself keeps the receiver on Ruby's stack, protecting it from GC.
+    // 3. Arguments, however, may have been computed and could be the only reference to an
+    //    object, so they need explicit pinning to prevent GC during the method body.
+    let self_param = &params[0];
+    let self_type = &self_param.inner_type;
+
+    // Generate extern "C" parameter declarations
+    let mut extern_params = vec![quote! { rb_self: solidus::rb_sys::VALUE }];
+    for i in 0..arity {
+        let arg_name = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
+        extern_params.push(quote! { #arg_name: solidus::rb_sys::VALUE });
+    }
+
+    // Generate conversion code for each argument
+    let mut conversion_stmts = Vec::new();
+    let mut call_args = Vec::new();
+
+    // Self conversion
+    conversion_stmts.push(quote! {
+        let self_value = unsafe { solidus::Value::from_raw(rb_self) };
+        let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
+    });
+    call_args.push(quote! { self_converted });
+
+    // Argument conversions with pinning
+    for (i, param) in params.iter().skip(1).enumerate() {
+        let arg_value = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
+        let arg_converted = syn::Ident::new(
+            &format!("arg{}_converted", i),
+            proc_macro2::Span::call_site(),
+        );
+        let arg_pinned =
+            syn::Ident::new(&format!("arg{}_pinned", i), proc_macro2::Span::call_site());
+        let inner_type = &param.inner_type;
+
+        // Always convert and pin (the pinning is for GC safety)
+        conversion_stmts.push(quote! {
+            let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
+            let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
+            solidus::pin_on_stack!(#arg_pinned = #arg_converted);
+        });
+
+        // Determine how to pass the argument to the user function
+        if param.is_explicit_pinned {
+            // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
+            call_args.push(quote! { #arg_pinned });
+        } else {
+            // User wants T directly, extract from pin and copy.
+            // The __assert_copy helper enforces that T: Copy at compile time.
+            call_args.push(quote! { { fn __assert_copy<T: Copy>(v: &T) -> T { *v } __assert_copy(#arg_pinned.get()) } });
+        }
+    }
+
+    Ok(quote! {
+        #[allow(unused_unsafe)]
+        unsafe extern "C" fn __wrapper(
+            #(#extern_params),*
+        ) -> solidus::rb_sys::VALUE {
+            let result = ::std::panic::catch_unwind(|| {
+                #(#conversion_stmts)*
+
+                let result = #fn_name(#(#call_args),*);
+
+                use solidus::method::ReturnValue;
+                result.into_return_value()
+            });
+
+            match result {
+                Ok(Ok(value)) => value.as_raw(),
+                Ok(Err(error)) => error.raise(),
+                Err(panic) => solidus::Error::from_panic(panic).raise(),
+            }
+        }
+
+        unsafe { ::std::mem::transmute(__wrapper as usize) }
+    })
+}
+
+/// Generate the extern "C" wrapper for a function dynamically based on parsed parameters.
+///
+/// This function generates a wrapper that handles both explicit `Pin<&StackPinned<T>>`
+/// parameters and implicit pinning for simple types.
+fn generate_function_wrapper_dynamic(
+    fn_name: &syn::Ident,
+    params: &[ParamInfo],
+) -> MacroResult<proc_macro2::TokenStream> {
+    let arity = params.len();
+    if arity > 2 {
+        return Err(syn::Error::new(
+            proc_macro2::Span::call_site(),
+            format!(
+                "#[solidus::function] currently supports arities 0-2, got {}. \
+                 For higher arities, use the function! macro directly.",
+                arity
+            ),
+        ));
+    }
+
+    // Generate extern "C" parameter declarations (always has _rb_self for Ruby)
+    let mut extern_params = vec![quote! { _rb_self: solidus::rb_sys::VALUE }];
+    for i in 0..arity {
+        let arg_name = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
+        extern_params.push(quote! { #arg_name: solidus::rb_sys::VALUE });
+    }
+
+    // Generate conversion code for each argument
+    let mut conversion_stmts = Vec::new();
+    let mut call_args = Vec::new();
+
+    // Argument conversions with pinning
+    for (i, param) in params.iter().enumerate() {
+        let arg_value = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
+        let arg_converted = syn::Ident::new(
+            &format!("arg{}_converted", i),
+            proc_macro2::Span::call_site(),
+        );
+        let arg_pinned =
+            syn::Ident::new(&format!("arg{}_pinned", i), proc_macro2::Span::call_site());
+        let inner_type = &param.inner_type;
+
+        // Always convert and pin (the pinning is for GC safety)
+        conversion_stmts.push(quote! {
+            let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
+            let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
+            solidus::pin_on_stack!(#arg_pinned = #arg_converted);
+        });
+
+        // Determine how to pass the argument to the user function
+        if param.is_explicit_pinned {
+            // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
+            call_args.push(quote! { #arg_pinned });
+        } else {
+            // User wants T directly, extract from pin and copy.
+            // The __assert_copy helper enforces that T: Copy at compile time.
+            call_args.push(quote! { { fn __assert_copy<T: Copy>(v: &T) -> T { *v } __assert_copy(#arg_pinned.get()) } });
+        }
+    }
+
+    // Handle arity 0 case (no arguments to convert)
+    let body = if params.is_empty() {
+        quote! {
+            let result = #fn_name();
+        }
+    } else {
+        quote! {
+            #(#conversion_stmts)*
+            let result = #fn_name(#(#call_args),*);
+        }
+    };
+
+    Ok(quote! {
+        #[allow(unused_unsafe)]
+        unsafe extern "C" fn __wrapper(
+            #(#extern_params),*
+        ) -> solidus::rb_sys::VALUE {
+            let result = ::std::panic::catch_unwind(|| {
+                #body
+
+                use solidus::method::ReturnValue;
+                result.into_return_value()
+            });
+
+            match result {
+                Ok(Ok(value)) => value.as_raw(),
+                Ok(Err(error)) => error.raise(),
+                Err(panic) => solidus::Error::from_panic(panic).raise(),
+            }
+        }
+
+        unsafe { ::std::mem::transmute(__wrapper as usize) }
+    })
 }

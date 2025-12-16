@@ -56,6 +56,12 @@
 pub use rb_sys;
 
 // Re-export proc-macros
+// Note: #[method] and #[function] attribute macros are available via solidus_macros
+// since the names conflict with the declarative method! and function! macros.
+// Users should use:
+//   - solidus::method!(func, arity) for the declarative macro
+//   - #[solidus_macros::method] for the attribute macro
+// The #[init] attribute macro doesn't conflict, so it's re-exported.
 pub use solidus_macros::init;
 
 // Modules
