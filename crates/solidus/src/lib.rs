@@ -57,8 +57,8 @@ pub use value::{BoxValue, ReprValue, StackPinned, Value, ValueType};
 
 // Re-export all types
 pub use types::{
-    Encoding, Fixnum, Float, Integer, Module, Qfalse, Qnil, Qtrue, RArray, RBignum, RClass,
-    RFloat, RHash, RModule, RString, Symbol,
+    Encoding, Fixnum, Float, Integer, Module, Qfalse, Qnil, Qtrue, RArray, RBignum, RClass, RFloat,
+    RHash, RModule, RString, Symbol,
 };
 
 #[cfg(target_pointer_width = "64")]
