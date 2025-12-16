@@ -9,7 +9,7 @@ Update this file when a phase is completed to avoid requiring full analysis.
 |-------|------|--------|----------------|
 | 0 | [Bootstrap](docs/plan/phase-0-bootstrap.md) | :white_check_mark: Complete | 2024-12 |
 | 1 | [Foundation](docs/plan/phase-1-foundation.md) | :white_check_mark: Complete | 2025-12 |
-| 2 | [Types](docs/plan/phase-2-types.md) | :construction: In Progress | |
+| 2 | [Types](docs/plan/phase-2-types.md) | :white_check_mark: Complete | 2025-12-16 |
 | 3 | [Methods](docs/plan/phase-3-methods.md) | :hourglass: Pending | |
 | 4 | [TypedData](docs/plan/phase-4-typed-data.md) | :hourglass: Pending | |
 | 5 | [Polish](docs/plan/phase-5-polish.md) | :hourglass: Pending | |
@@ -33,15 +33,23 @@ Phase 1 completed with the following components:
 - `gc` module - GC registration/unregistration utilities
 - `pin_on_stack!` macro - Convenient stack pinning
 
-Phase 2 progress (see [phase-2-tasks.md](docs/plan/phase-2-tasks.md) for detailed task breakdown):
-- Stage 1: Conversion Traits (Complete) - `TryConvert` and `IntoValue` traits
+Phase 2 completed with all core Ruby types implemented:
+- Stage 1: Conversion Traits (Complete) - `TryConvert` and `IntoValue` traits with comprehensive Rust type support
 - Stage 2: Immediate Types (Complete) - `Qnil`, `Qtrue`, `Qfalse`, `Fixnum`, `Symbol`, `Flonum`
 - Stage 3: Numeric Types (Complete) - `RBignum`, `Integer`, `RFloat`, `Float` with full conversions
 - Stage 4: String Type (Complete) - `RString` with encoding support and `Encoding` type
 - Stage 5: Array Type (Complete) - `RArray` with push/pop/entry/store/each and Vec conversions
-- Stage 6: Hash Type (Pending)
-- Stage 7: Class and Module Types (Pending)
-- Stage 8: Additional Types (Pending)
+- Stage 6: Hash Type (Complete) - `RHash` with insert/get/delete/each and HashMap conversions
+- Stage 7: Class and Module Types (Complete) - `RClass`, `RModule` with `Module` trait for shared functionality
+- Stage 8: Additional Types (Skipped) - Optional types deferred to future phases
+- Stage 9: Final Integration (Complete) - All types exported, documented, and tested
+
+All acceptance criteria met:
+- All major Ruby types have Rust wrappers
+- `TryConvert` and `IntoValue` work for common types (primitives, String, Vec, HashMap)
+- Immediate values can be used without pinning
+- Heap values require pinning in method signatures
+- Comprehensive test coverage (153 tests pass with Ruby, 28 without)
 
 <!-- Add any relevant notes about progress, blockers, or decisions here -->
 
