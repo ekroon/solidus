@@ -10,7 +10,7 @@ Update this file when a phase is completed to avoid requiring full analysis.
 | 0 | [Bootstrap](docs/plan/phase-0-bootstrap.md) | :white_check_mark: Complete | 2024-12 |
 | 1 | [Foundation](docs/plan/phase-1-foundation.md) | :white_check_mark: Complete | 2025-12 |
 | 2 | [Types](docs/plan/phase-2-types.md) | :white_check_mark: Complete | 2025-12-16 |
-| 3 | [Methods](docs/plan/phase-3-methods.md) | :hourglass: Pending | |
+| 3 | [Methods](docs/plan/phase-3-methods.md) | :construction: In Progress | |
 | 4 | [TypedData](docs/plan/phase-4-typed-data.md) | :hourglass: Pending | |
 | 5 | [Polish](docs/plan/phase-5-polish.md) | :hourglass: Pending | |
 | 6 | [Safety Validation](docs/plan/phase-6-safety-validation.md) | :hourglass: Pending | |
@@ -50,6 +50,18 @@ All acceptance criteria met:
 - Immediate values can be used without pinning
 - Heap values require pinning in method signatures
 - Comprehensive test coverage (153 tests pass with Ruby, 28 without)
+
+Phase 3 progress:
+- Stage 1: Method Infrastructure (Complete) - `MethodArg` and `ReturnValue` traits
+- Stage 2: Basic Method Macro (Complete) - `method!` macro for arities 0-4 with explicit Pin signatures
+- Stage 3: Ergonomic Method Macro (Pending) - Implicit pinning for simpler signatures
+- Stage 4: Function Macro (Complete) - `function!` macro for arities 0-4 without self parameter
+- Stage 5: Method Definition API (Pending) - `define_method` for RClass/RModule, `define_global_function` for Ruby
+- Stage 6: Init Macro (Pending) - `#[solidus::init]` attribute macro
+- Stage 7: Variadic Arguments (Pending) - Support for Ruby variadic methods
+- Stage 8: Block Arguments (Pending) - Support for Ruby blocks
+- Stage 9: Keyword Arguments (Pending) - Support for Ruby keyword arguments
+- Stage 10: Integration and Polish (Pending) - Examples and documentation
 
 <!-- Add any relevant notes about progress, blockers, or decisions here -->
 

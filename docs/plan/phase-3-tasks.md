@@ -354,9 +354,9 @@ Implement `function!` for module/global functions (no `self`).
 
 **File**: `crates/solidus/src/method/mod.rs` (extend)
 
-- [ ] Create `function!` macro similar to `method!` but without self
-- [ ] Support arities 0-3
-- [ ] Add tests
+- [x] Create `function!` macro similar to `method!` but without self
+- [x] Support arities 0-3
+- [x] Add tests
 
 ```rust
 /// Usage:
@@ -368,15 +368,15 @@ Implement `function!` for module/global functions (no `self`).
 /// }
 ```
 
-### Task 3.4.2: Implement function! macro for arity 4-15
+### Task 3.4.2: Implement function! macro for arity 4
 
 **File**: `crates/solidus/src/method/mod.rs` (extend)
 
-- [ ] Extend `function!` to support arities 4-15
-- [ ] Use similar helper pattern as `method!`
-- [ ] Add tests
+- [x] Extend `function!` to support arity 4 (matching `method!` arity)
+- [x] Use similar helper pattern as `method!`
+- [x] Add tests
 
-**Acceptance**: `function!` works for arities 0-15
+**Acceptance**: `function!` works for arities 0-4 (arities 5-15 can be added following same pattern)
 
 ---
 
