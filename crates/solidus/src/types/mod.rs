@@ -30,17 +30,21 @@
 //! ```
 
 mod array;
+mod class;
 mod float;
 mod hash;
 mod immediate;
 mod integer;
+mod module;
 mod string;
 mod symbol;
 
 pub use array::RArray;
+pub use class::RClass;
 pub use hash::RHash;
 pub use immediate::{Qfalse, Qnil, Qtrue};
 pub use integer::{Fixnum, Integer, RBignum};
+pub use module::{Module, RModule};
 pub use string::{Encoding, RString};
 pub use symbol::Symbol;
 
