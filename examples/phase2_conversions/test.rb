@@ -1,13 +1,13 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Test script for Phase 2 Stage 1: Conversion Traits Example
+# Test script for Phase 2 Stage 2: Immediate Types Example
 #
-# Note: This stage only implements the conversion trait infrastructure.
+# This stage implements immediate value types (nil, true, false, fixnum, symbol, flonum).
 # Full integration testing from Ruby requires Phase 3 (method definition).
-# This script simply verifies that the extension builds successfully.
+# This script verifies that the extension builds successfully.
 
-puts "=== Phase 2 Stage 1: Conversion Traits Example ==="
+puts "=== Phase 2 Stage 2: Immediate Types Example ==="
 puts
 
 # Build the extension
@@ -48,17 +48,25 @@ end
 puts
 puts "=== Testing Notes ==="
 puts
-puts "This example demonstrates the TryConvert and IntoValue traits at the Rust level."
+puts "This example demonstrates immediate types at the Rust level."
 puts
-puts "Key points:"
-puts "• Stage 1 implements only identity conversions (Value -> Value)"
-puts "• The exported C functions are present but cannot be meaningfully tested"
-puts "  from Ruby without proper method registration (Phase 3)"
-puts "• Run 'cargo test' in this directory to run the Rust unit tests"
-puts "• Later stages will add implementations for specific Ruby types"
-puts "  (integers, strings, arrays, etc.)"
+puts "Implemented types:"
+puts "• Qnil, Qtrue, Qfalse - Ruby's singleton values"
+puts "• Fixnum - Small integers (immediate value)"
+puts "• Symbol - Interned strings"
+puts "• Flonum - Immediate floats (64-bit platforms only)"
+puts "• Full conversions for Rust bool, i8-i64, u8-u64, f32, f64, &str"
+puts
+puts "Key features:"
+puts "• Immediate values don't require GC protection or pinning"
+puts "• Type-safe conversions with TryConvert and IntoValue traits"
+puts "• Symbol interning works correctly"
+puts "• Platform-aware Flonum support"
+puts
+puts "Run 'cargo test' in this directory to run the Rust unit tests."
+puts "Full Ruby integration testing requires Phase 3 (method registration)."
 puts
 puts "=== Next Steps ==="
 puts
-puts "Stage 2 will implement immediate types (Fixnum, Symbol, etc.) which will"
-puts "enable real conversions between Rust and Ruby types."
+puts "Stage 3 will implement numeric types (Bignum for large integers, full Float support)."
+puts "Stage 4+ will add String, Array, Hash, Class, and Module types."

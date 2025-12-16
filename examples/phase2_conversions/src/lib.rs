@@ -1,114 +1,206 @@
-//! Phase 2 Stage 1: Conversion Traits Example
+//! Phase 2 Stage 2: Immediate Types Example
 //!
-//! This example demonstrates the `TryConvert` and `IntoValue` traits that form
-//! the foundation for converting between Ruby and Rust types.
+//! This example demonstrates Ruby's immediate types (nil, true, false, fixnum, symbol, flonum).
+//! Immediate values are encoded directly in the VALUE and don't require GC protection or pinning.
 //!
-//! Since Stage 1 only implements the trait infrastructure with identity conversions
-//! for `Value`, this example shows how the traits work at a fundamental level.
-//! Later stages will add implementations for specific types like strings, integers,
-//! arrays, etc.
+//! This shows Stage 2 implementation: immediate value wrappers with type-safe conversions.
 
 use solidus::prelude::*;
 
-/// Example 1: Identity conversion with IntoValue
-/// 
-/// Shows that a Value can be converted back to a Value (identity conversion).
+/// Example 1: Working with nil, true, and false
+///
+/// Demonstrates the Qnil, Qtrue, and Qfalse singleton types.
 #[no_mangle]
-pub extern "C" fn example_identity_into_value(val: rb_sys::VALUE) -> rb_sys::VALUE {
-    // Wrap the raw Ruby VALUE (unsafe as we trust Ruby to pass valid VALUEs)
-    let value = unsafe { Value::from_raw(val) };
+pub extern "C" fn example_booleans() -> rb_sys::VALUE {
+    // Create Ruby singletons
+    let nil_val = Qnil::new();
+    let true_val = Qtrue::new();
+    let false_val = Qfalse::new();
     
-    // Convert it back using IntoValue (identity conversion)
-    let result = value.into_value();
+    // Convert to Value
+    assert!(nil_val.as_value().is_nil());
+    assert!(true_val.as_value().is_true());
+    assert!(false_val.as_value().is_false());
     
-    result.as_raw()
+    // Try converting Values back to specific types
+    assert!(Qnil::try_convert(nil_val.as_value()).is_ok());
+    assert!(Qtrue::try_convert(true_val.as_value()).is_ok());
+    assert!(Qfalse::try_convert(false_val.as_value()).is_ok());
+    
+    // Cross-type conversion should fail
+    assert!(Qtrue::try_convert(nil_val.as_value()).is_err());
+    assert!(Qfalse::try_convert(true_val.as_value()).is_err());
+    
+    true_val.into_value().as_raw()
 }
 
-/// Example 2: Identity conversion with TryConvert
+/// Example 2: Rust bool to Ruby conversions
 ///
-/// Shows that a Value can be converted to a Value via TryConvert (always succeeds).
+/// Shows how Rust booleans map to Ruby true/false.
 #[no_mangle]
-pub extern "C" fn example_identity_try_convert(val: rb_sys::VALUE) -> rb_sys::VALUE {
-    // Wrap the raw Ruby VALUE (unsafe as we trust Ruby to pass valid VALUEs)
+pub extern "C" fn example_rust_bool(rust_bool: bool) -> rb_sys::VALUE {
+    // Rust bool -> Ruby true/false
+    let ruby_value = rust_bool.into_value();
+    
+    // Ruby follows its truthiness rules
+    if rust_bool {
+        assert!(ruby_value.is_true());
+    } else {
+        assert!(ruby_value.is_false());
+    }
+    
+    ruby_value.as_raw()
+}
+
+/// Example 3: Ruby truthiness
+///
+/// Demonstrates Ruby's truthiness rules: only nil and false are falsy.
+#[no_mangle]
+pub extern "C" fn example_truthiness(val: rb_sys::VALUE) -> rb_sys::VALUE {
     let value = unsafe { Value::from_raw(val) };
     
-    // Try to convert it back to a Value
-    match Value::try_convert(value) {
-        Ok(result) => result.as_raw(),
-        Err(e) => e.raise(),
+    // Convert Ruby value to Rust bool using Ruby's truthiness rules
+    let is_truthy = bool::try_convert(value).unwrap();
+    
+    is_truthy.into_value().as_raw()
+}
+
+/// Example 4: Working with Fixnum (small integers)
+///
+/// Demonstrates fixnum creation and conversion.
+#[no_mangle]
+pub extern "C" fn example_fixnum(n: i64) -> rb_sys::VALUE {
+    // Create a Fixnum (panics if too large for current implementation)
+    let fixnum = Fixnum::from_i64(n).expect("value should fit in Fixnum");
+    
+    // Get the value back
+    assert_eq!(fixnum.to_i64(), n);
+    
+    // Convert to Value
+    let value = fixnum.into_value();
+    assert!(!value.is_nil());
+    
+    value.as_raw()
+}
+
+/// Example 5: Integer type conversions
+///
+/// Shows conversion between Ruby integers and various Rust integer types.
+#[no_mangle]
+pub extern "C" fn example_integer_conversions(val: rb_sys::VALUE) -> rb_sys::VALUE {
+    let value = unsafe { Value::from_raw(val) };
+    
+    // Try converting to different integer types
+    if let Ok(n) = i32::try_convert(value) {
+        // Successfully converted to i32
+        let doubled = n * 2;
+        return doubled.into_value().as_raw();
+    }
+    
+    // If it doesn't fit in i32, try i64
+    if let Ok(n) = i64::try_convert(value) {
+        let doubled = n * 2;
+        return doubled.into_value().as_raw();
+    }
+    
+    // Not an integer
+    Qnil::new().into_value().as_raw()
+}
+
+/// Example 6: Working with Symbols
+///
+/// Demonstrates symbol creation and interning.
+#[no_mangle]
+pub extern "C" fn example_symbols() -> rb_sys::VALUE {
+    // Create symbols
+    let sym1 = Symbol::new("hello");
+    let sym2 = Symbol::new("hello");
+    let sym3 = Symbol::new("world");
+    
+    // Symbols are interned - same string = same symbol
+    assert_eq!(sym1.as_value(), sym2.as_value());
+    assert_ne!(sym1.as_value(), sym3.as_value());
+    
+    // Get symbol name
+    assert_eq!(sym1.name().unwrap(), "hello");
+    assert_eq!(sym3.name().unwrap(), "world");
+    
+    sym1.into_value().as_raw()
+}
+
+/// Example 7: Symbol from &str
+///
+/// Shows direct conversion from Rust string slices to Ruby symbols.
+#[no_mangle]
+pub extern "C" fn example_str_to_symbol() -> rb_sys::VALUE {
+    // &str can be directly converted to a Ruby symbol
+    let sym_value = "test_symbol".into_value();
+    
+    // Verify it's a symbol
+    let sym = Symbol::try_convert(sym_value).unwrap();
+    assert_eq!(sym.name().unwrap(), "test_symbol");
+    
+    sym_value.as_raw()
+}
+
+/// Example 8: Working with floats
+///
+/// Demonstrates float conversions (f32, f64).
+#[no_mangle]
+pub extern "C" fn example_floats(f: f64) -> rb_sys::VALUE {
+    // Convert f64 to Ruby
+    let ruby_float = f.into_value();
+    
+    // Convert back
+    let back_to_rust = f64::try_convert(ruby_float).unwrap();
+    assert!((back_to_rust - f).abs() < 0.00001);
+    
+    // f32 also works
+    let f32_val = 2.5f32.into_value();
+    let back = f32::try_convert(f32_val).unwrap();
+    assert!((back - 2.5f32).abs() < 0.00001);
+    
+    ruby_float.as_raw()
+}
+
+#[cfg(target_pointer_width = "64")]
+/// Example 9: Flonum (immediate floats on 64-bit platforms)
+///
+/// On 64-bit platforms, small floats can be immediate values.
+#[no_mangle]
+pub extern "C" fn example_flonum_64bit() -> rb_sys::VALUE {
+    // Try to create a Flonum
+    if let Some(flonum) = Flonum::from_f64(1.5) {
+        let value = flonum.to_f64();
+        assert!((value - 1.5).abs() < 0.00001);
+        flonum.into_value().as_raw()
+    } else {
+        // Some floats require heap allocation
+        1.5f64.into_value().as_raw()
     }
 }
 
-/// Example 3: Working with nil values
+/// Example 10: Type-safe immediate value handling
 ///
-/// Demonstrates converting nil using both traits.
-#[no_mangle]
-pub extern "C" fn example_nil_conversions() -> rb_sys::VALUE {
-    // Get a nil value
-    let nil_value = Value::nil();
+/// Shows how immediate values don't need pinning in function signatures.
+fn process_immediate_values(count: i64, name: Symbol, enabled: bool) -> Value {
+    // All of these are immediate values, so they can be passed directly
+    // without Pin<&StackPinned<T>> wrappers
     
-    // Convert using IntoValue
-    let via_into = nil_value.into_value();
-    
-    // Convert using TryConvert
-    let via_try = match Value::try_convert(nil_value) {
-        Ok(v) => v,
-        Err(e) => e.raise(),
-    };
-    
-    // Both should be the same
-    assert_eq!(via_into.as_raw(), via_try.as_raw());
-    
-    via_into.as_raw()
-}
-
-/// Example 4: Generic function using IntoValue
-///
-/// Shows how generic functions can accept any type that implements IntoValue.
-fn convert_to_value<T: IntoValue>(item: T) -> Value {
-    item.into_value()
-}
-
-#[no_mangle]
-pub extern "C" fn example_generic_into_value(val: rb_sys::VALUE) -> rb_sys::VALUE {
-    let value = unsafe { Value::from_raw(val) };
-    
-    // Use the generic function
-    let result = convert_to_value(value);
-    
-    result.as_raw()
-}
-
-/// Example 5: Generic function using TryConvert
-///
-/// Shows how generic functions can convert from Value to any type implementing TryConvert.
-fn convert_from_value<T: TryConvert>(val: Value) -> Result<T, Error> {
-    T::try_convert(val)
-}
-
-#[no_mangle]
-pub extern "C" fn example_generic_try_convert(val: rb_sys::VALUE) -> rb_sys::VALUE {
-    let value = unsafe { Value::from_raw(val) };
-    
-    // Use the generic function to convert Value -> Value
-    match convert_from_value::<Value>(value) {
-        Ok(result) => result.as_raw(),
-        Err(e) => e.raise(),
+    if enabled {
+        Symbol::new(&format!("{}_{}", name.name().unwrap(), count)).into_value()
+    } else {
+        Qnil::new().into_value()
     }
 }
 
-/// Example 6: Chaining conversions
-///
-/// Demonstrates that conversions can be chained together.
 #[no_mangle]
-pub extern "C" fn example_chained_conversions(val: rb_sys::VALUE) -> rb_sys::VALUE {
-    let value = unsafe { Value::from_raw(val) };
-    
-    // Chain: Value -> IntoValue -> TryConvert -> Value
-    let result = match Value::try_convert(value.into_value()) {
-        Ok(v) => v,
-        Err(e) => e.raise(),
-    };
+pub extern "C" fn example_immediate_function() -> rb_sys::VALUE {
+    let result = process_immediate_values(
+        42,
+        Symbol::new("test"),
+        true
+    );
     
     result.as_raw()
 }
@@ -120,9 +212,24 @@ pub extern "C" fn Init_phase2_conversions() {
     // For now, this is just a placeholder that Ruby will call when loading the extension
 }
 
-// Note: Unit tests that call Ruby API functions (like Value::nil()) require
-// the Ruby runtime to be initialized. These tests would need to use
-// rb-sys-test-helpers with #[ruby_test] annotation.
-//
-// For now, the trait implementations are tested via the solidus crate tests.
-// This example serves to demonstrate the pattern and verify compilation.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compile_time_checks() {
+        // These tests verify compile-time behavior only
+        // Tests requiring Ruby API calls need the Ruby runtime
+        
+        // Verify immediate types are Copy
+        fn assert_copy<T: Copy>() {}
+        assert_copy::<Qnil>();
+        assert_copy::<Qtrue>();
+        assert_copy::<Qfalse>();
+        assert_copy::<Fixnum>();
+        assert_copy::<Symbol>();
+        
+        #[cfg(target_pointer_width = "64")]
+        assert_copy::<Flonum>();
+    }
+}

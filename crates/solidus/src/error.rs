@@ -146,6 +146,11 @@ impl Error {
         Error::new(ExceptionClass::ArgumentError, message)
     }
 
+    /// Create a RangeError with the given message.
+    pub fn range_error<T: Into<String>>(message: T) -> Self {
+        Error::new(ExceptionClass::RangeError, message)
+    }
+
     /// Create an error from a Rust panic.
     ///
     /// This is used internally to convert panics caught by `catch_unwind`
