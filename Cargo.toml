@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/solidus", "crates/solidus-macros"]
+exclude = ["examples/*"]
 
 [workspace.package]
 version = "0.1.0"

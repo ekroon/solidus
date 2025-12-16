@@ -43,6 +43,7 @@
 pub use rb_sys;
 
 // Modules
+pub mod convert;
 pub mod error;
 pub mod gc;
 pub mod ruby;
@@ -59,6 +60,7 @@ pub use value::{BoxValue, ReprValue, StackPinned, Value, ValueType};
 pub mod prelude {
     pub use std::pin::Pin;
 
+    pub use crate::convert::{IntoValue, TryConvert};
     pub use crate::error::{Error, ExceptionClass};
     pub use crate::pin_on_stack;
     pub use crate::ruby::Ruby;
