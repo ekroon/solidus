@@ -137,6 +137,7 @@ Complex phases have separate task files with step-by-step implementation guides:
 | Phase | Task File | Description |
 |-------|-----------|-------------|
 | 2 | [phase-2-tasks.md](docs/plan/phase-2-tasks.md) | Ruby types implementation in 9 stages |
+| 3 | [phase-3-tasks.md](docs/plan/phase-3-tasks.md) | Method registration in 10 stages |
 
 Task files contain:
 - Ordered tasks with dependencies
