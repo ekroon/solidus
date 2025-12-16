@@ -113,6 +113,16 @@ fn example(arg: Pin<&StackPinned<RString>>) -> Result<RString, Error>
 3. Update workspace `Cargo.toml` to exclude from workspace (examples build separately)
 4. Document in `examples/README.md`
 
+## Progress Tracking
+
+**Check `PROGRESS.md` for current phase completion status.** This file tracks which
+implementation phases are complete, in progress, or pending. Always consult it before
+starting work to understand the current state without needing to analyze all phase files.
+
+- Update `PROGRESS.md` when completing a phase
+- Individual phase details are in `docs/plan/phase-*.md`
+- See `PLAN.md` for the overall implementation plan
+
 ## References
 
 - [Magnus source](https://github.com/matsadler/magnus) - Original inspiration
