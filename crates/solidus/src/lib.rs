@@ -46,6 +46,7 @@ pub use rb_sys;
 pub mod convert;
 pub mod error;
 pub mod gc;
+pub mod method;
 pub mod ruby;
 pub mod types;
 pub mod value;

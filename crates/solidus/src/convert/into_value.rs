@@ -37,6 +37,14 @@ impl IntoValue for Value {
     }
 }
 
+// Implement IntoValue for unit type (returns nil)
+impl IntoValue for () {
+    #[inline]
+    fn into_value(self) -> Value {
+        Value::nil()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +54,11 @@ mod tests {
         let val = Value::nil();
         let result = val.into_value();
         assert_eq!(val.as_raw(), result.as_raw());
+    }
+
+    #[test]
+    fn test_unit_into_value() {
+        let val = ().into_value();
+        assert!(val.is_nil());
     }
 }

@@ -25,9 +25,9 @@ Core traits and types needed before implementing the method macros.
 
 **File**: `crates/solidus/src/method/mod.rs`
 
-- [ ] Create the `method` directory and `mod.rs`
-- [ ] Add module to `lib.rs`
-- [ ] Create submodule files
+- [x] Create the `method` directory and `mod.rs`
+- [x] Add module to `lib.rs`
+- [x] Create submodule files
 
 ```rust
 // crates/solidus/src/method/mod.rs
@@ -45,11 +45,11 @@ pub use return_value::ReturnValue;
 The `ReturnValue` trait handles converting method return values to Ruby.
 It supports both direct values and `Result` types.
 
-- [ ] Define the `ReturnValue` trait
-- [ ] Implement for types that implement `IntoValue`
-- [ ] Implement for `Result<T, Error>` where T: IntoValue
-- [ ] Implement for `()` (returns nil)
-- [ ] Add tests
+- [x] Define the `ReturnValue` trait
+- [x] Implement for types that implement `IntoValue`
+- [x] Implement for `Result<T, Error>` where T: IntoValue
+- [x] Implement for `()` (returns nil)
+- [x] Add tests
 
 ```rust
 use crate::convert::IntoValue;
@@ -96,10 +96,10 @@ in `Ok()` before calling a unified handler.
 This trait marks types that can be used as method arguments and indicates
 whether they need stack pinning.
 
-- [ ] Define the `MethodArg` trait
-- [ ] Implement for immediate types (no pinning needed): `i8`-`i64`, `u8`-`u64`, `f32`, `f64`, `bool`, `Fixnum`, `Symbol`, `Qnil`, `Qtrue`, `Qfalse`
-- [ ] Implement for heap types (pinning needed): `RString`, `RArray`, `RHash`, `RClass`, `RModule`, `Value`, etc.
-- [ ] Add tests
+- [x] Define the `MethodArg` trait
+- [x] Implement for immediate types (no pinning needed): `i8`-`i64`, `u8`-`u64`, `f32`, `f64`, `bool`, `Fixnum`, `Symbol`, `Qnil`, `Qtrue`, `Qfalse`
+- [x] Implement for heap types (pinning needed): `RString`, `RArray`, `RHash`, `RClass`, `RModule`, `Value`, etc.
+- [x] Add tests
 
 ```rust
 /// Marker trait for types that can be method arguments.
