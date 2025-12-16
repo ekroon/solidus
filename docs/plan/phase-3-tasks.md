@@ -482,11 +482,11 @@ Implement `#[solidus::init]` attribute macro.
 
 **File**: `crates/solidus-macros/src/lib.rs`
 
-- [ ] Parse the annotated function
-- [ ] Generate `#[no_mangle] pub extern "C" fn Init_<crate_name>()`
-- [ ] Call the user's function with `Ruby::get()`
-- [ ] Handle errors by raising Ruby exceptions
-- [ ] Add tests
+- [x] Parse the annotated function
+- [x] Generate `#[no_mangle] pub extern "C" fn Init_<crate_name>()`
+- [x] Call the user's function with `Ruby::get()`
+- [x] Handle errors by raising Ruby exceptions
+- [x] Add tests
 
 ```rust
 /// Input:
@@ -520,10 +520,10 @@ Implement `#[solidus::init]` attribute macro.
 
 **File**: `crates/solidus-macros/src/lib.rs` (extend)
 
-- [ ] Detect the crate name from `CARGO_PKG_NAME` environment variable
-- [ ] Convert to valid Ruby identifier (replace `-` with `_`)
-- [ ] Allow override via attribute argument: `#[solidus::init(name = "custom_name")]`
-- [ ] Add tests
+- [x] Detect the crate name from `CARGO_PKG_NAME` environment variable
+- [x] Convert to valid Ruby identifier (replace `-` with `_`)
+- [x] Allow override via attribute argument: `#[solidus::init(name = "custom_name")]`
+- [x] Add tests
 
 ```rust
 // Default: uses crate name
@@ -541,9 +541,9 @@ fn init(ruby: &Ruby) -> Result<(), Error> { ... }
 
 **File**: `crates/solidus/src/lib.rs`
 
-- [ ] Re-export `#[init]` from solidus-macros
-- [ ] Add to prelude
-- [ ] Update documentation
+- [x] Re-export `#[init]` from solidus-macros
+- [x] Add to prelude
+- [x] Update documentation
 
 ```rust
 pub use solidus_macros::init;

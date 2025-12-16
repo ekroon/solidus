@@ -42,6 +42,9 @@
 // Re-export rb-sys for low-level access
 pub use rb_sys;
 
+// Re-export proc-macros
+pub use solidus_macros::init;
+
 // Modules
 pub mod convert;
 pub mod error;
@@ -73,6 +76,7 @@ pub mod prelude {
 
     pub use crate::convert::{IntoValue, TryConvert};
     pub use crate::error::{Error, ExceptionClass};
+    pub use crate::init;
     pub use crate::pin_on_stack;
     pub use crate::ruby::Ruby;
     pub use crate::types::{
