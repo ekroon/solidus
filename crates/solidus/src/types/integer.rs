@@ -42,11 +42,11 @@ impl Fixnum {
         if n < isize::MIN as i64 || n > isize::MAX as i64 {
             return None;
         }
-        
+
         // SAFETY: We've verified n fits in isize, and rb_int2inum handles the conversion
         let val = unsafe { rb_sys::rb_int2inum(n as isize) };
         let val = unsafe { Value::from_raw(val) };
-        
+
         // Check if it's actually a Fixnum (not a Bignum)
         if rb_sys::FIXNUM_P(val.as_raw()) {
             Some(Fixnum(val))
@@ -116,8 +116,12 @@ impl IntoValue for i64 {
 impl TryConvert for i32 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for i32", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for i32", n),
+            )
+        })
     }
 }
 
@@ -130,8 +134,12 @@ impl IntoValue for i32 {
 impl TryConvert for i16 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for i16", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for i16", n),
+            )
+        })
     }
 }
 
@@ -144,8 +152,12 @@ impl IntoValue for i16 {
 impl TryConvert for i8 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for i8", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for i8", n),
+            )
+        })
     }
 }
 
@@ -158,8 +170,12 @@ impl IntoValue for i8 {
 impl TryConvert for isize {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for isize", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for isize", n),
+            )
+        })
     }
 }
 
@@ -174,8 +190,12 @@ impl IntoValue for isize {
 impl TryConvert for u64 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for u64", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for u64", n),
+            )
+        })
     }
 }
 
@@ -193,8 +213,12 @@ impl IntoValue for u64 {
 impl TryConvert for u32 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for u32", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for u32", n),
+            )
+        })
     }
 }
 
@@ -207,8 +231,12 @@ impl IntoValue for u32 {
 impl TryConvert for u16 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for u16", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for u16", n),
+            )
+        })
     }
 }
 
@@ -221,8 +249,12 @@ impl IntoValue for u16 {
 impl TryConvert for u8 {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for u8", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for u8", n),
+            )
+        })
     }
 }
 
@@ -235,8 +267,12 @@ impl IntoValue for u8 {
 impl TryConvert for usize {
     fn try_convert(val: Value) -> Result<Self, Error> {
         let n = i64::try_convert(val)?;
-        n.try_into()
-            .map_err(|_| Error::new(crate::ExceptionClass::RangeError, format!("integer {} out of range for usize", n)))
+        n.try_into().map_err(|_| {
+            Error::new(
+                crate::ExceptionClass::RangeError,
+                format!("integer {} out of range for usize", n),
+            )
+        })
     }
 }
 
@@ -246,36 +282,37 @@ impl IntoValue for usize {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "embed", feature = "link-ruby")))]
 mod tests {
     use super::*;
+    use rb_sys_test_helpers::ruby_test;
 
-    #[test]
+    #[ruby_test]
     fn test_fixnum_small() {
         let num = Fixnum::from_i64(42).unwrap();
         assert_eq!(num.to_i64(), 42);
     }
 
-    #[test]
+    #[ruby_test]
     fn test_fixnum_zero() {
         let num = Fixnum::from_i64(0).unwrap();
         assert_eq!(num.to_i64(), 0);
     }
 
-    #[test]
+    #[ruby_test]
     fn test_fixnum_negative() {
         let num = Fixnum::from_i64(-123).unwrap();
         assert_eq!(num.to_i64(), -123);
     }
 
-    #[test]
+    #[ruby_test]
     fn test_i32_conversion() {
         let val = 42i32.into_value();
         let n = i32::try_convert(val).unwrap();
         assert_eq!(n, 42);
     }
 
-    #[test]
+    #[ruby_test]
     fn test_u8_conversion() {
         let val = 255u8.into_value();
         let n = u8::try_convert(val).unwrap();

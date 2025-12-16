@@ -2,8 +2,8 @@
 //!
 //! This module provides two core traits for converting between Ruby and Rust types:
 //!
-//! - [`TryConvert`] - Convert from Ruby [`Value`] to Rust types (fallible)
-//! - [`IntoValue`] - Convert from Rust types to Ruby [`Value`] (infallible)
+//! - [`TryConvert`] - Convert from Ruby [`crate::value::Value`] to Rust types (fallible)
+//! - [`IntoValue`] - Convert from Rust types to Ruby [`crate::value::Value`] (infallible)
 //!
 //! # Example
 //!

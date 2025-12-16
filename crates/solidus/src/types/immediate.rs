@@ -243,7 +243,7 @@ mod tests {
         // Only nil and false are falsy
         assert!(!bool::try_convert(Value::nil()).unwrap());
         assert!(!bool::try_convert(Value::r#false()).unwrap());
-        
+
         // Everything else is truthy
         assert!(bool::try_convert(Value::r#true()).unwrap());
     }

@@ -26,12 +26,18 @@ users to manually ensure values stay on the stack.
 
 - **Build**: `cargo build`
 - **Build all**: `cargo build --workspace`
-- **Test Rust**: `cargo test --workspace`
-- **Test with Ruby**: `cargo test --workspace --features embed`
+- **Test Rust**: `cargo test --workspace` (28 tests, no Ruby required)
+- **Test with Ruby (CI)**: `cargo test --workspace --features embed` (requires static Ruby)
+- **Test with Ruby (local)**: `cargo test --workspace --features link-ruby` (39 tests, requires dynamic Ruby)
 - **Run single test**: `cargo test -p solidus test_name`
 - **Lint**: `cargo fmt --check && cargo clippy --workspace`
 - **Format**: `cargo fmt --all`
 - **Check docs**: `cargo doc --workspace --no-deps`
+
+**Note on Ruby tests**: Unit tests that call Ruby C API functions use `rb-sys-test-helpers` 
+with the `#[ruby_test]` macro to properly initialize Ruby. Both `embed` and `link-ruby` 
+features work correctly. The Ruby tests are conditional on these features to avoid 
+requiring Ruby for basic development.
 
 ## Code Style
 

@@ -9,4 +9,7 @@ fn main() {
 
     // rb-sys-env provides Ruby configuration at build time
     // The actual linking is handled by rb-sys
+
+    // Activate rb-sys-env for test builds to support rb-sys-test-helpers
+    let _ = rb_sys_env::activate();
 }

@@ -34,7 +34,7 @@ impl Flonum {
     pub fn from_f64(n: f64) -> Option<Self> {
         // SAFETY: rb_float_new creates a Float VALUE
         let val = unsafe { Value::from_raw(rb_sys::rb_float_new(n)) };
-        
+
         // Check if it's actually a Flonum (not a heap float)
         if rb_sys::FLONUM_P(val.as_raw()) {
             Some(Flonum(val))
@@ -119,18 +119,19 @@ impl IntoValue for f32 {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "embed", feature = "link-ruby")))]
 mod tests {
     use super::*;
+    use rb_sys_test_helpers::ruby_test;
 
-    #[test]
+    #[ruby_test]
     fn test_f64_conversion() {
         let val = 3.14f64.into_value();
         let f = f64::try_convert(val).unwrap();
         assert!((f - 3.14).abs() < 0.001);
     }
 
-    #[test]
+    #[ruby_test]
     fn test_f32_conversion() {
         let val = 2.5f32.into_value();
         let f = f32::try_convert(val).unwrap();
@@ -138,7 +139,7 @@ mod tests {
     }
 
     #[cfg(target_pointer_width = "64")]
-    #[test]
+    #[ruby_test]
     fn test_flonum() {
         // Small floats should be Flonums on 64-bit
         let num = Flonum::from_f64(1.5).expect("1.5 should be a Flonum");

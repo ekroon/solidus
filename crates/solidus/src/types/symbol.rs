@@ -59,16 +59,20 @@ impl Symbol {
     pub fn name(self) -> Result<String, Error> {
         // SAFETY: rb_sym2str converts symbol to string
         let str_val = unsafe { Value::from_raw(rb_sys::rb_sym2str(self.0.as_raw())) };
-        
+
         // Get the string pointer and length
         // SAFETY: We know str_val is a String from rb_sym2str
         unsafe {
             let ptr = rb_sys::RSTRING_PTR(str_val.as_raw()) as *const u8;
             let len = rb_sys::RSTRING_LEN(str_val.as_raw()) as usize;
             let slice = std::slice::from_raw_parts(ptr, len);
-            
-            String::from_utf8(slice.to_vec())
-                .map_err(|_| Error::new(crate::ExceptionClass::ArgumentError, "symbol name is not valid UTF-8"))
+
+            String::from_utf8(slice.to_vec()).map_err(|_| {
+                Error::new(
+                    crate::ExceptionClass::ArgumentError,
+                    "symbol name is not valid UTF-8",
+                )
+            })
         }
     }
 }
@@ -110,24 +114,25 @@ impl IntoValue for &str {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "embed", feature = "link-ruby")))]
 mod tests {
     use super::*;
+    use rb_sys_test_helpers::ruby_test;
 
-    #[test]
+    #[ruby_test]
     fn test_symbol_new() {
         let sym = Symbol::new("test");
         assert_eq!(sym.as_value().rb_type(), ValueType::Symbol);
     }
 
-    #[test]
+    #[ruby_test]
     fn test_symbol_identity() {
         let sym1 = Symbol::new("foo");
         let sym2 = Symbol::new("foo");
         assert_eq!(sym1.as_value(), sym2.as_value());
     }
 
-    #[test]
+    #[ruby_test]
     fn test_symbol_different() {
         let sym1 = Symbol::new("foo");
         let sym2 = Symbol::new("bar");

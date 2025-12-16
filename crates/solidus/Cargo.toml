@@ -13,9 +13,13 @@ categories.workspace = true
 rb-sys.workspace = true
 solidus-macros.workspace = true
 
+[dev-dependencies]
+rb-sys-test-helpers = "0.2"
+
 [build-dependencies]
 rb-sys-env = "0.1"
 
 [features]
 default = []
 embed = ["rb-sys/ruby-static", "rb-sys/link-ruby"]
+link-ruby = ["rb-sys/link-ruby"]
