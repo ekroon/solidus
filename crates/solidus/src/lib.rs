@@ -17,6 +17,14 @@
 //! - Immediate values (Fixnum, Symbol, true, false, nil) bypass pinning as they
 //!   don't need GC protection
 //!
+//! # Core Types
+//!
+//! - [`Value`] - Base wrapper around Ruby's VALUE
+//! - [`StackPinned<T>`](value::StackPinned) - `!Unpin` wrapper for stack pinning
+//! - [`BoxValue<T>`] - Heap-allocated, GC-registered wrapper
+//! - [`Ruby`] - Handle to the Ruby VM
+//! - [`Error`] - Ruby exception wrapper
+//!
 //! # Example
 //!
 //! ```ignore
@@ -30,3 +38,29 @@
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
+
+// Re-export rb-sys for low-level access
+pub use rb_sys;
+
+// Modules
+pub mod error;
+pub mod gc;
+pub mod ruby;
+pub mod value;
+
+// Re-exports for convenience
+pub use error::{Error, ExceptionClass};
+pub use ruby::Ruby;
+pub use value::{BoxValue, ReprValue, StackPinned, Value, ValueType};
+
+/// Prelude module for convenient imports.
+///
+/// Use `use solidus::prelude::*;` to import commonly used types and traits.
+pub mod prelude {
+    pub use std::pin::Pin;
+
+    pub use crate::error::{Error, ExceptionClass};
+    pub use crate::pin_on_stack;
+    pub use crate::ruby::Ruby;
+    pub use crate::value::{BoxValue, ReprValue, StackPinned, Value, ValueType};
+}
