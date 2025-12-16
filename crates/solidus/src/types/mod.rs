@@ -29,16 +29,18 @@
 //! }
 //! ```
 
+mod float;
 mod immediate;
 mod integer;
 mod symbol;
-
-#[cfg(target_pointer_width = "64")]
-mod float;
 
 pub use immediate::{Qfalse, Qnil, Qtrue};
 pub use integer::{Fixnum, Integer, RBignum};
 pub use symbol::Symbol;
 
+// Flonum is only available on 64-bit platforms
 #[cfg(target_pointer_width = "64")]
 pub use float::Flonum;
+
+// RFloat and Float are always available
+pub use float::{Float, RFloat};
