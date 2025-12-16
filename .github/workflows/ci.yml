@@ -89,7 +89,9 @@ jobs:
         with:
           ruby-version: "3.4"
       - name: Test with link-ruby feature
-        run: cargo test --workspace --features link-ruby
+        run: |
+          export LD_LIBRARY_PATH="$(ruby -e 'puts RbConfig::CONFIG["libdir"]'):$LD_LIBRARY_PATH"
+          cargo test --workspace --features link-ruby
 
   docs:
     name: Documentation
