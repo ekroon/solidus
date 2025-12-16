@@ -37,7 +37,7 @@ mod symbol;
 mod float;
 
 pub use immediate::{Qfalse, Qnil, Qtrue};
-pub use integer::Fixnum;
+pub use integer::{Fixnum, Integer, RBignum};
 pub use symbol::Symbol;
 
 #[cfg(target_pointer_width = "64")]
