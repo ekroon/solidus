@@ -257,7 +257,12 @@ impl IntoValue for String {
     }
 }
 
-// Note: &str IntoValue is defined in symbol.rs to avoid conflicts
+// Convert string slices to Ruby strings
+impl IntoValue for &str {
+    fn into_value(self) -> Value {
+        RString::new(self).into_value()
+    }
+}
 
 /// Ruby string encoding.
 ///

@@ -107,13 +107,6 @@ impl IntoValue for Symbol {
     }
 }
 
-// Allow converting &str to Symbol
-impl IntoValue for &str {
-    fn into_value(self) -> Value {
-        Symbol::new(self).into_value()
-    }
-}
-
 #[cfg(all(test, any(feature = "embed", feature = "link-ruby")))]
 mod tests {
     use super::*;

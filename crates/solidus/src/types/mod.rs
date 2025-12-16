@@ -31,12 +31,14 @@
 
 mod array;
 mod float;
+mod hash;
 mod immediate;
 mod integer;
 mod string;
 mod symbol;
 
 pub use array::RArray;
+pub use hash::RHash;
 pub use immediate::{Qfalse, Qnil, Qtrue};
 pub use integer::{Fixnum, Integer, RBignum};
 pub use string::{Encoding, RString};
