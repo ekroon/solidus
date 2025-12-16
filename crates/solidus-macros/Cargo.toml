@@ -17,3 +17,7 @@ syn = { version = "2", features = ["full"] }
 
 [dev-dependencies]
 solidus = { path = "../solidus" }
+
+[features]
+default = []
+link-ruby = ["solidus/link-ruby"]

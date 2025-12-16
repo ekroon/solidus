@@ -2,6 +2,9 @@
 //!
 //! These tests verify that the macros compile correctly and generate the expected
 //! structures (ARITY constant and wrapper() function).
+//!
+//! These tests require Ruby to be linked, so they only run with the `link-ruby` feature.
+#![cfg(feature = "link-ruby")]
 
 use solidus::prelude::*;
 use solidus::rb_sys;
