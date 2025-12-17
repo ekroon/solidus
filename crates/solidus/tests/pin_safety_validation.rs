@@ -1,5 +1,11 @@
 // Tests that verify the safety guarantees of PinGuard and pin_on_stack!
 // These tests confirm that dangerous patterns no longer compile.
+//
+// Note: These tests are disabled when link-ruby is enabled because they use
+// rb_sys::Qnil without initializing Ruby, which causes segfaults. These tests
+// validate compile-time safety guarantees (type system properties) and don't
+// need Ruby to actually be linked/running.
+#![cfg(not(feature = "link-ruby"))]
 
 use solidus::pin_on_stack;
 use solidus::value::{PinGuard, Value};
