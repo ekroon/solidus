@@ -55,6 +55,29 @@ requiring Ruby for basic development.
 - **Safety**: Document all `unsafe` blocks with `// SAFETY:` comments
 - **Documentation**: All public items must have doc comments
 
+### Git Pre-Commit Hook
+
+**RECOMMENDED**: Install the pre-commit hook to automatically enforce formatting before commits.
+
+To set up the pre-commit hook, run this command from the project root:
+
+```bash
+cp pre-commit.sh .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
+
+The hook will:
+- Check code formatting with `cargo fmt --all -- --check` before allowing commits
+- Reject commits if any files have formatting issues
+- Provide clear instructions on how to fix formatting issues
+
+If the hook blocks your commit due to formatting issues, simply run:
+
+```bash
+cargo fmt --all
+git add -u  # Re-stage the formatted files
+git commit  # Try again
+```
+
 ### Pre-Commit Checklist
 
 **CRITICAL**: CI will fail if code is not properly formatted. ALWAYS run `cargo fmt --all` 
@@ -74,7 +97,8 @@ The CI pipeline enforces strict formatting and linting standards. Running these 
 locally before committing will catch issues early and prevent CI failures.
 
 **Remember**: Step 1 (`cargo fmt --all`) is non-negotiable - formatting violations will 
-cause the CI Format job to fail immediately.
+cause the CI Format job to fail immediately. Using the pre-commit hook (see above) automates 
+this check.
 
 ## Crate Structure
 
