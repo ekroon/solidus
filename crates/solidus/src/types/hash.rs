@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{ReprValue, Value};
+use crate::value::{PinGuard, ReprValue, Value};
 
 /// Ruby Hash (heap allocated).
 ///
@@ -20,27 +20,32 @@ use crate::value::{ReprValue, Value};
 /// hash.insert("key", "value");
 /// assert_eq!(hash.len(), 1);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RHash(Value);
 
 impl RHash {
     /// Create a new empty Ruby hash.
     ///
+    /// Returns a `PinGuard<RHash>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RHash;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// assert_eq!(hash.len(), 0);
-    /// assert!(hash.is_empty());
+    /// let guard = RHash::new();
+    /// pin_on_stack!(hash = guard);
+    /// assert_eq!(hash.get().len(), 0);
+    /// assert!(hash.get().is_empty());
     /// ```
-    pub fn new() -> Self {
+    pub fn new() -> PinGuard<Self> {
         // SAFETY: rb_hash_new creates a new Ruby hash
         let val = unsafe { rb_sys::rb_hash_new() };
         // SAFETY: rb_hash_new returns a valid VALUE
-        RHash(unsafe { Value::from_raw(val) })
+        PinGuard::new(RHash(unsafe { Value::from_raw(val) }))
     }
 
     /// Get the number of key-value pairs in the hash.
@@ -56,7 +61,7 @@ impl RHash {
     /// assert_eq!(hash.len(), 2);
     /// ```
     #[inline]
-    pub fn len(self) -> usize {
+    pub fn len(&self) -> usize {
         // SAFETY: self.0 is a valid Ruby hash VALUE
         unsafe { rb_sys::rb_hash_size_num(self.0.as_raw()) as usize }
     }
@@ -75,7 +80,7 @@ impl RHash {
     /// assert!(!hash.is_empty());
     /// ```
     #[inline]
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
@@ -101,7 +106,7 @@ impl RHash {
     ///
     /// assert!(hash.get("missing").is_none());
     /// ```
-    pub fn get<K: IntoValue>(self, key: K) -> Option<Value> {
+    pub fn get<K: IntoValue>(&self, key: K) -> Option<Value> {
         let key_val = key.into_value();
         // SAFETY: self.0 is a valid Ruby hash, key_val is a valid VALUE
         let val = unsafe { rb_sys::rb_hash_lookup(self.0.as_raw(), key_val.as_raw()) };
@@ -131,7 +136,7 @@ impl RHash {
     /// hash.insert("age", 31i64); // Update existing key
     /// assert_eq!(hash.len(), 2);
     /// ```
-    pub fn insert<K: IntoValue, V: IntoValue>(self, key: K, value: V) {
+    pub fn insert<K: IntoValue, V: IntoValue>(&self, key: K, value: V) {
         let key_val = key.into_value();
         let val = value.into_value();
         // SAFETY: self.0 is a valid Ruby hash, both VALUES are valid
@@ -158,7 +163,7 @@ impl RHash {
     ///
     /// assert!(hash.delete("key").is_none());
     /// ```
-    pub fn delete<K: IntoValue>(self, key: K) -> Option<Value> {
+    pub fn delete<K: IntoValue>(&self, key: K) -> Option<Value> {
         let key_val = key.into_value();
         // SAFETY: self.0 is a valid Ruby hash, key_val is a valid VALUE
         let val = unsafe { rb_sys::rb_hash_delete(self.0.as_raw(), key_val.as_raw()) };
@@ -198,7 +203,7 @@ impl RHash {
     /// })?;
     /// assert_eq!(sum, 3);
     /// ```
-    pub fn each<F>(self, mut f: F) -> Result<(), Error>
+    pub fn each<F>(&self, mut f: F) -> Result<(), Error>
     where
         F: FnMut(Value, Value) -> Result<(), Error>,
     {
@@ -206,7 +211,9 @@ impl RHash {
 
         // Create a temporary array to collect key-value pairs
         // This is safer than using rb_hash_foreach which requires complex FFI callbacks
-        let pairs = RArray::new();
+        let pairs_guard = RArray::new();
+        // SAFETY: We unwrap the guard to use the array throughout this function
+        let pairs = unsafe { pairs_guard.into_inner() };
 
         // Use rb_hash_foreach to collect all pairs
         unsafe extern "C" fn collect_pair(
@@ -266,7 +273,7 @@ impl RHash {
     /// assert_eq!(map.get("a"), Some(&1));
     /// assert_eq!(map.get("b"), Some(&2));
     /// ```
-    pub fn to_hash_map<K, V>(self) -> Result<HashMap<K, V>, Error>
+    pub fn to_hash_map<K, V>(&self) -> Result<HashMap<K, V>, Error>
     where
         K: TryConvert + Eq + std::hash::Hash,
         V: TryConvert,
@@ -285,42 +292,50 @@ impl RHash {
 
     /// Create a Ruby hash from a Rust HashMap.
     ///
+    /// Returns a `PinGuard<RHash>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RHash;
+    /// use solidus::pin_on_stack;
     /// use std::collections::HashMap;
     ///
     /// let mut map = HashMap::new();
     /// map.insert("a", 1i64);
     /// map.insert("b", 2i64);
     ///
-    /// let hash = RHash::from_hash_map(map);
-    /// assert_eq!(hash.len(), 2);
+    /// let guard = RHash::from_hash_map(map);
+    /// pin_on_stack!(hash = guard);
+    /// assert_eq!(hash.get().len(), 2);
     /// ```
-    pub fn from_hash_map<K, V>(map: HashMap<K, V>) -> Self
+    pub fn from_hash_map<K, V>(map: HashMap<K, V>) -> PinGuard<Self>
     where
         K: IntoValue,
         V: IntoValue,
     {
-        let hash = RHash::new();
+        let guard = RHash::new();
+        // SAFETY: We need to unwrap the guard to use the hash, then re-wrap it
+        let hash = unsafe { guard.into_inner() };
         for (k, v) in map {
             hash.insert(k, v);
         }
-        hash
+        PinGuard::new(hash)
     }
 }
 
 impl Default for RHash {
     fn default() -> Self {
-        RHash::new()
+        // SAFETY: We need to unwrap the PinGuard to return Self
+        unsafe { RHash::new().into_inner() }
     }
 }
 
 impl ReprValue for RHash {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -366,7 +381,9 @@ where
     V: IntoValue,
 {
     fn into_value(self) -> Value {
-        RHash::from_hash_map(self).into_value()
+        let guard = RHash::from_hash_map(self);
+        // SAFETY: We immediately convert to Value
+        unsafe { guard.into_inner().into_value() }
     }
 }
 
@@ -590,7 +607,7 @@ mod tests {
 
         let val2 = hash.get(Symbol::new("symbol_key")).unwrap();
         // Check if it's a symbol value
-        if let Ok(sym) = Symbol::try_convert(val2) {
+        if let Ok(sym) = Symbol::try_convert(val2.clone()) {
             // It's a symbol, not a string
             panic!("Got Symbol instead of String: {:?}", sym);
         }

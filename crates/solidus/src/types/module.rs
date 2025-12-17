@@ -19,7 +19,7 @@ use crate::value::{ReprValue, Value};
 /// let enumerable = RModule::from_name("Enumerable").unwrap();
 /// assert_eq!(enumerable.name().unwrap(), "Enumerable");
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RModule(Value);
 
@@ -88,7 +88,7 @@ impl RModule {
     /// let enumerable = RModule::from_name("Enumerable").unwrap();
     /// assert_eq!(enumerable.name().unwrap(), "Enumerable");
     /// ```
-    pub fn name(self) -> Option<String> {
+    pub fn name(&self) -> Option<String> {
         // SAFETY: self.0 is a valid Ruby module VALUE
         // rb_mod_name works for both classes and modules
         let val = unsafe { rb_sys::rb_mod_name(self.0.as_raw()) };
@@ -111,8 +111,8 @@ impl RModule {
 
 impl ReprValue for RModule {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -166,7 +166,7 @@ pub trait Module: ReprValue {
     /// let string_class = RClass::from_name("String").unwrap();
     /// string_class.define_const("VERSION", "1.0.0").unwrap();
     /// ```
-    fn define_const<T: IntoValue>(self, name: &str, value: T) -> Result<(), Error> {
+    fn define_const<T: IntoValue>(&self, name: &str, value: T) -> Result<(), Error> {
         // Convert name to C string
         let c_name = std::ffi::CString::new(name)
             .map_err(|_| Error::argument("constant name contains null byte"))?;
@@ -197,7 +197,7 @@ pub trait Module: ReprValue {
     /// let file_class = RClass::from_name("File").unwrap();
     /// let separator = file_class.const_get("SEPARATOR").unwrap();
     /// ```
-    fn const_get(self, name: &str) -> Result<Value, Error> {
+    fn const_get(&self, name: &str) -> Result<Value, Error> {
         // Convert name to C string
         let c_name = std::ffi::CString::new(name)
             .map_err(|_| Error::argument("constant name contains null byte"))?;

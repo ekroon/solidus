@@ -19,7 +19,7 @@ use std::pin::Pin;
 struct TestValue(i64);
 
 impl solidus::value::ReprValue for TestValue {
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         unsafe { Value::from_raw(self.0 as rb_sys::VALUE) }
     }
 

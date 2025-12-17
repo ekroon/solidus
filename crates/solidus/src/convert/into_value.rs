@@ -52,8 +52,9 @@ mod tests {
     #[test]
     fn test_value_into_value() {
         let val = Value::nil();
+        let raw = val.as_raw();
         let result = val.into_value();
-        assert_eq!(val.as_raw(), result.as_raw());
+        assert_eq!(raw, result.as_raw());
     }
 
     #[test]

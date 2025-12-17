@@ -21,7 +21,7 @@ use std::pin::Pin;
 
 /// Instance method with arity 0 - just self
 /// Returns a greeting message
-fn greet(rb_self: RString) -> Result<RString, Error> {
+fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
     let name = rb_self.to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name)))
 }
@@ -54,7 +54,7 @@ fn multiply_three(
 
 /// Instance method that demonstrates error handling
 /// Returns an error if called
-fn always_fails(_rb_self: RString) -> Result<RString, Error> {
+fn always_fails(_rb_self: RString) -> Result<PinGuard<RString>, Error> {
     Err(Error::runtime("This method always fails!"))
 }
 
@@ -64,13 +64,13 @@ fn always_fails(_rb_self: RString) -> Result<RString, Error> {
 
 /// Module function with arity 0
 /// Returns a constant string
-fn get_version() -> Result<RString, Error> {
+fn get_version() -> Result<PinGuard<RString>, Error> {
     Ok(RString::new("1.0.0"))
 }
 
 /// Module function with arity 1
 /// Converts a string to uppercase
-fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let input = s.get().to_string()?;
     Ok(RString::new(&input.to_uppercase()))
 }
@@ -80,7 +80,7 @@ fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
 fn join_with(
     s1: Pin<&StackPinned<RString>>,
     s2: Pin<&StackPinned<RString>>,
-) -> Result<RString, Error> {
+) -> Result<PinGuard<RString>, Error> {
     let str1 = s1.get().to_string()?;
     let str2 = s2.get().to_string()?;
     Ok(RString::new(&format!("{} - {}", str1, str2)))
@@ -92,7 +92,7 @@ fn join_with(
 
 /// Class method (singleton method) with arity 0
 /// Returns a constant string representation of PI
-fn pi() -> Result<RString, Error> {
+fn pi() -> Result<PinGuard<RString>, Error> {
     Ok(RString::new("3.14159"))
 }
 
@@ -119,13 +119,13 @@ fn power(base: Pin<&StackPinned<RString>>, exponent: Pin<&StackPinned<RString>>)
 // ============================================================================
 
 /// Class method that creates a new Calculator with a default name
-fn create_default() -> Result<RString, Error> {
+fn create_default() -> Result<PinGuard<RString>, Error> {
     Ok(RString::new("Calculator"))
 }
 
 /// Class method with arity 1
 /// Creates a Calculator with a custom name
-fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let n = name.get().to_string()?;
     Ok(RString::new(&format!("Calculator: {}", n)))
 }
@@ -136,13 +136,13 @@ fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<RString, Error> 
 
 /// Global function with arity 0
 /// Returns a greeting
-fn hello() -> Result<RString, Error> {
+fn hello() -> Result<PinGuard<RString>, Error> {
     Ok(RString::new("Hello from Solidus!"))
 }
 
 /// Global function with arity 1
 /// Repeats a string n times
-fn repeat_string(s: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn repeat_string(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let input = s.get().to_string()?;
     Ok(RString::new(&input.repeat(3)))
 }
@@ -163,7 +163,7 @@ fn average_three(
     a: Pin<&StackPinned<RString>>,
     b: Pin<&StackPinned<RString>>,
     c: Pin<&StackPinned<RString>>,
-) -> Result<RString, Error> {
+) -> Result<PinGuard<RString>, Error> {
     let num_a = a.get().to_string()?.parse::<f64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
     let num_b = b.get().to_string()?.parse::<f64>()
@@ -187,13 +187,13 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     let calc_rclass = RClass::try_convert(calc_class)?;
     
     // Instance methods using method! macro
-    calc_rclass.define_method("greet", solidus::method!(greet, 0), 0)?;
-    calc_rclass.define_method("add", solidus::method!(add, 1), 1)?;
-    calc_rclass.define_method("multiply_three", solidus::method!(multiply_three, 2), 2)?;
-    calc_rclass.define_method("always_fails", solidus::method!(always_fails, 0), 0)?;
+    calc_rclass.clone().define_method("greet", solidus::method!(greet, 0), 0)?;
+    calc_rclass.clone().define_method("add", solidus::method!(add, 1), 1)?;
+    calc_rclass.clone().define_method("multiply_three", solidus::method!(multiply_three, 2), 2)?;
+    calc_rclass.clone().define_method("always_fails", solidus::method!(always_fails, 0), 0)?;
     
     // Class methods using function! macro and define_singleton_method
-    calc_rclass.define_singleton_method(
+    calc_rclass.clone().define_singleton_method(
         "create_default",
         solidus::function!(create_default, 0),
         0
@@ -213,12 +213,12 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     
     // Module functions using function! macro and define_module_function
     // These can be called as StringUtils.method_name or via include
-    string_utils_rmodule.define_module_function(
+    string_utils_rmodule.clone().define_module_function(
         "get_version",
         solidus::function!(get_version, 0),
         0
     )?;
-    string_utils_rmodule.define_module_function(
+    string_utils_rmodule.clone().define_module_function(
         "to_upper",
         solidus::function!(to_upper, 1),
         1
@@ -237,12 +237,12 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     let math_rmodule = RModule::try_convert(math_module)?;
     
     // Singleton methods on the module (class methods)
-    math_rmodule.define_singleton_method(
+    math_rmodule.clone().define_singleton_method(
         "pi",
         solidus::function!(pi, 0),
         0
     )?;
-    math_rmodule.define_singleton_method(
+    math_rmodule.clone().define_singleton_method(
         "double",
         solidus::function!(double, 1),
         1

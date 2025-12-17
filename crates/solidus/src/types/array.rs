@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{ReprValue, Value};
+use crate::value::{PinGuard, ReprValue, Value};
 
 /// Ruby Array (heap allocated).
 ///
@@ -19,27 +19,32 @@ use crate::value::{ReprValue, Value};
 /// arr.push("hello");
 /// assert_eq!(arr.len(), 2);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RArray(Value);
 
 impl RArray {
     /// Create a new empty Ruby array.
     ///
+    /// Returns a `PinGuard<RArray>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// assert_eq!(arr.len(), 0);
-    /// assert!(arr.is_empty());
+    /// let guard = RArray::new();
+    /// pin_on_stack!(arr = guard);
+    /// assert_eq!(arr.get().len(), 0);
+    /// assert!(arr.get().is_empty());
     /// ```
-    pub fn new() -> Self {
+    pub fn new() -> PinGuard<Self> {
         // SAFETY: rb_ary_new creates a new Ruby array
         let val = unsafe { rb_sys::rb_ary_new() };
         // SAFETY: rb_ary_new returns a valid VALUE
-        RArray(unsafe { Value::from_raw(val) })
+        PinGuard::new(RArray(unsafe { Value::from_raw(val) }))
     }
 
     /// Create a new Ruby array with the specified capacity.
@@ -47,19 +52,24 @@ impl RArray {
     /// This pre-allocates space for `capacity` elements, which can improve
     /// performance when you know how many elements you'll add.
     ///
+    /// Returns a `PinGuard<RArray>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::with_capacity(100);
-    /// assert_eq!(arr.len(), 0);
+    /// let guard = RArray::with_capacity(100);
+    /// pin_on_stack!(arr = guard);
+    /// assert_eq!(arr.get().len(), 0);
     /// ```
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> PinGuard<Self> {
         // SAFETY: rb_ary_new_capa creates a new Ruby array with the given capacity
         let val = unsafe { rb_sys::rb_ary_new_capa(capacity as _) };
         // SAFETY: rb_ary_new_capa returns a valid VALUE
-        RArray(unsafe { Value::from_raw(val) })
+        PinGuard::new(RArray(unsafe { Value::from_raw(val) }))
     }
 
     /// Get the number of elements in the array.
@@ -75,7 +85,7 @@ impl RArray {
     /// assert_eq!(arr.len(), 2);
     /// ```
     #[inline]
-    pub fn len(self) -> usize {
+    pub fn len(&self) -> usize {
         // SAFETY: self.0 is a valid Ruby array VALUE
         unsafe { rb_sys::RARRAY_LEN(self.0.as_raw()) as usize }
     }
@@ -94,7 +104,7 @@ impl RArray {
     /// assert!(!arr.is_empty());
     /// ```
     #[inline]
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
@@ -112,7 +122,7 @@ impl RArray {
     /// arr.push("hello");
     /// assert_eq!(arr.len(), 2);
     /// ```
-    pub fn push<T: IntoValue>(self, value: T) {
+    pub fn push<T: IntoValue>(&self, value: T) {
         let val = value.into_value();
         // SAFETY: self.0 is a valid Ruby array, val is a valid VALUE
         unsafe {
@@ -136,7 +146,7 @@ impl RArray {
     /// let val = arr.pop().unwrap();
     /// assert_eq!(arr.len(), 1);
     /// ```
-    pub fn pop(self) -> Option<Value> {
+    pub fn pop(&self) -> Option<Value> {
         if self.is_empty() {
             return None;
         }
@@ -168,7 +178,7 @@ impl RArray {
     /// let val = arr.entry(1);
     /// let val_neg = arr.entry(-1); // Last element
     /// ```
-    pub fn entry(self, index: isize) -> Value {
+    pub fn entry(&self, index: isize) -> Value {
         // SAFETY: self.0 is a valid Ruby array, rb_ary_entry handles bounds checking
         let val = unsafe { rb_sys::rb_ary_entry(self.0.as_raw(), index as _) };
         // SAFETY: rb_ary_entry returns a valid VALUE (nil if out of bounds)
@@ -190,7 +200,7 @@ impl RArray {
     /// arr.store(1, "hello");
     /// arr.store(-1, "world"); // Replaces last element
     /// ```
-    pub fn store<T: IntoValue>(self, index: isize, value: T) {
+    pub fn store<T: IntoValue>(&self, index: isize, value: T) {
         let val = value.into_value();
         // SAFETY: self.0 is a valid Ruby array, val is a valid VALUE
         unsafe {
@@ -228,7 +238,7 @@ impl RArray {
     /// })?;
     /// assert_eq!(sum, 6);
     /// ```
-    pub fn each<F>(self, mut f: F) -> Result<(), Error>
+    pub fn each<F>(&self, mut f: F) -> Result<(), Error>
     where
         F: FnMut(Value) -> Result<(), Error>,
     {
@@ -242,20 +252,27 @@ impl RArray {
 
     /// Create a Ruby array from a Rust slice.
     ///
+    /// Returns a `PinGuard<RArray>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::from_slice(&[1, 2, 3, 4, 5]);
-    /// assert_eq!(arr.len(), 5);
+    /// let guard = RArray::from_slice(&[1, 2, 3, 4, 5]);
+    /// pin_on_stack!(arr = guard);
+    /// assert_eq!(arr.get().len(), 5);
     /// ```
-    pub fn from_slice<T: IntoValue + Copy>(slice: &[T]) -> Self {
-        let arr = RArray::with_capacity(slice.len());
+    pub fn from_slice<T: IntoValue + Copy>(slice: &[T]) -> PinGuard<Self> {
+        let guard = RArray::with_capacity(slice.len());
+        // SAFETY: We need to unwrap the guard to use the array, then re-wrap it
+        let arr = unsafe { guard.into_inner() };
         for &item in slice {
             arr.push(item);
         }
-        arr
+        PinGuard::new(arr)
     }
 
     /// Convert this array to a Rust Vec.
@@ -276,7 +293,7 @@ impl RArray {
     /// let vec: Vec<i64> = arr.to_vec()?;
     /// assert_eq!(vec, vec![1, 2, 3]);
     /// ```
-    pub fn to_vec<T: TryConvert>(self) -> Result<Vec<T>, Error> {
+    pub fn to_vec<T: TryConvert>(&self) -> Result<Vec<T>, Error> {
         let len = self.len();
         let mut vec = Vec::with_capacity(len);
         for i in 0..len {
@@ -289,14 +306,15 @@ impl RArray {
 
 impl Default for RArray {
     fn default() -> Self {
-        RArray::new()
+        // SAFETY: We unwrap the PinGuard to return Self
+        unsafe { RArray::new().into_inner() }
     }
 }
 
 impl ReprValue for RArray {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -327,21 +345,24 @@ impl IntoValue for RArray {
 
 impl<T: TryConvert> TryConvert for Vec<T> {
     fn try_convert(val: Value) -> Result<Self, Error> {
-        let array = RArray::try_convert(val)?;
-        array.to_vec()
+        RArray::try_convert(val)?.to_vec()
     }
 }
 
 impl<T: IntoValue + Copy> IntoValue for Vec<T> {
     fn into_value(self) -> Value {
-        RArray::from_slice(&self).into_value()
+        let guard = RArray::from_slice(&self);
+        // SAFETY: We immediately convert to Value
+        unsafe { guard.into_inner().into_value() }
     }
 }
 
 // Also implement for slices
 impl<T: IntoValue + Copy> IntoValue for &[T] {
     fn into_value(self) -> Value {
-        RArray::from_slice(self).into_value()
+        let guard = RArray::from_slice(self);
+        // SAFETY: We immediately convert to Value
+        unsafe { guard.into_inner().into_value() }
     }
 }
 

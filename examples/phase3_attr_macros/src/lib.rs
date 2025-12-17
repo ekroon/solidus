@@ -30,7 +30,7 @@
 //!
 //! ```ignore
 //! #[solidus_macros::method]
-//! fn safe_read(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+//! fn safe_read(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 //!     // This is safe - we copy the VALUE (which is just a pointer-sized integer)
 //!     let value: RString = *arg.get();
 //!     Ok(value)
@@ -56,7 +56,7 @@
 //! fn bad_collect(
 //!     rb_self: RString,
 //!     arg: Pin<&StackPinned<RString>>,
-//! ) -> Result<RString, Error> {
+//! ) -> Result<PinGuard<RString>, Error> {
 //!     // This won't compile - can't store the pinned reference in a Vec
 //!     let mut heap_vec: Vec<Pin<&StackPinned<RString>>> = Vec::new();
 //!     heap_vec.push(arg);  // ERROR: cannot move out of `arg`
@@ -79,7 +79,7 @@
 //!
 //! ```ignore
 //! #[solidus_macros::function]
-//! fn greet(name: RString) -> Result<RString, Error> {
+//! fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 //!     // `name` was automatically pinned on the stack by the macro wrapper.
 //!     // The user function receives a Copy of the VALUE, which is safe because:
 //!     // 1. The original VALUE is pinned on the wrapper's stack frame
@@ -129,23 +129,23 @@ use std::pin::Pin;
 
 /// Global function with no arguments.
 #[solidus_macros::function]
-fn get_greeting() -> Result<RString, Error> {
+fn get_greeting() -> Result<PinGuard<RString>, Error> {
     Ok(RString::new("Hello from attribute macros!"))
 }
 
 /// Global function with implicit pinning.
 /// Notice: `name` is just `RString`, not `Pin<&StackPinned<RString>>`.
 #[solidus_macros::function]
-fn greet(name: RString) -> Result<RString, Error> {
-    let name_str = name.to_string()?;
+fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+    let name_str = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name_str)))
 }
 
 /// Global function with two implicitly pinned arguments.
 #[solidus_macros::function]
-fn join_strings(first: RString, second: RString) -> Result<RString, Error> {
-    let a = first.to_string()?;
-    let b = second.to_string()?;
+fn join_strings(first: Pin<&StackPinned<RString>>, second: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+    let a = first.get().to_string()?;
+    let b = second.get().to_string()?;
     Ok(RString::new(&format!("{} {}", a, b)))
 }
 
@@ -159,18 +159,18 @@ fn length(rb_self: RString) -> Result<i64, Error> {
 
 /// Instance method with implicit pinning for the argument.
 #[solidus_macros::method]
-fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let self_str = rb_self.to_string()?;
-    let other_str = other.to_string()?;
+    let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
 }
 
 /// Instance method with two implicitly pinned arguments.
 #[solidus_macros::method]
-fn surround(rb_self: RString, prefix: RString, suffix: RString) -> Result<RString, Error> {
-    let p = prefix.to_string()?;
+fn surround(rb_self: RString, prefix: Pin<&StackPinned<RString>>, suffix: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+    let p = prefix.get().to_string()?;
     let s = rb_self.to_string()?;
-    let x = suffix.to_string()?;
+    let x = suffix.get().to_string()?;
     Ok(RString::new(&format!("{}{}{}", p, s, x)))
 }
 
@@ -184,7 +184,7 @@ fn surround(rb_self: RString, prefix: RString, suffix: RString) -> Result<RStrin
 fn concat_explicit(
     rb_self: RString,
     other: Pin<&StackPinned<RString>>,
-) -> Result<RString, Error> {
+) -> Result<PinGuard<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
@@ -192,7 +192,7 @@ fn concat_explicit(
 
 /// Global function with explicit pinning.
 #[solidus_macros::function]
-fn uppercase_explicit(s: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn uppercase_explicit(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let input = s.get().to_string()?;
     Ok(RString::new(&input.to_uppercase()))
 }
@@ -205,10 +205,10 @@ fn uppercase_explicit(s: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
 #[solidus_macros::function]
 fn format_mixed(
     explicit_arg: Pin<&StackPinned<RString>>,
-    implicit_arg: RString,
-) -> Result<RString, Error> {
+    implicit_arg: Pin<&StackPinned<RString>>,
+) -> Result<PinGuard<RString>, Error> {
     let a = explicit_arg.get().to_string()?;
-    let b = implicit_arg.to_string()?;
+    let b = implicit_arg.get().to_string()?;
     Ok(RString::new(&format!("[{}] -> [{}]", a, b)))
 }
 
@@ -217,7 +217,7 @@ fn format_mixed(
 fn combine_mixed(
     rb_self: RString,
     explicit_arg: Pin<&StackPinned<RString>>,
-) -> Result<RString, Error> {
+) -> Result<PinGuard<RString>, Error> {
     let s = rb_self.to_string()?;
     let e = explicit_arg.get().to_string()?;
     Ok(RString::new(&format!("{}+{}", s, e)))
@@ -229,24 +229,24 @@ fn combine_mixed(
 
 /// Module function with implicit pinning.
 #[solidus_macros::function]
-fn to_upper(s: RString) -> Result<RString, Error> {
-    let input = s.to_string()?;
+fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+    let input = s.get().to_string()?;
     Ok(RString::new(&input.to_uppercase()))
 }
 
 /// Module function to reverse a string.
 #[solidus_macros::function]
-fn reverse(s: RString) -> Result<RString, Error> {
-    let input = s.to_string()?;
+fn reverse(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+    let input = s.get().to_string()?;
     let reversed: String = input.chars().rev().collect();
     Ok(RString::new(&reversed))
 }
 
 /// Module function with two args.
 #[solidus_macros::function]
-fn repeat_join(text: RString, separator: RString) -> Result<RString, Error> {
-    let t = text.to_string()?;
-    let sep = separator.to_string()?;
+fn repeat_join(text: Pin<&StackPinned<RString>>, separator: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+    let t = text.get().to_string()?;
+    let sep = separator.get().to_string()?;
     Ok(RString::new(&format!("{}{}{}{}{}", t, sep, t, sep, t)))
 }
 
@@ -294,27 +294,27 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     let attr_string_rclass = RClass::try_convert(attr_string_class)?;
 
     // Register instance methods using the generated modules
-    attr_string_rclass.define_method(
+    attr_string_rclass.clone().define_method(
         "attr_length",
         __solidus_method_length::wrapper(),
         __solidus_method_length::ARITY,
     )?;
-    attr_string_rclass.define_method(
+    attr_string_rclass.clone().define_method(
         "attr_concat",
         __solidus_method_concat::wrapper(),
         __solidus_method_concat::ARITY,
     )?;
-    attr_string_rclass.define_method(
+    attr_string_rclass.clone().define_method(
         "attr_surround",
         __solidus_method_surround::wrapper(),
         __solidus_method_surround::ARITY,
     )?;
-    attr_string_rclass.define_method(
+    attr_string_rclass.clone().define_method(
         "attr_concat_explicit",
         __solidus_method_concat_explicit::wrapper(),
         __solidus_method_concat_explicit::ARITY,
     )?;
-    attr_string_rclass.define_method(
+    attr_string_rclass.clone().define_method(
         "attr_combine_mixed",
         __solidus_method_combine_mixed::wrapper(),
         __solidus_method_combine_mixed::ARITY,
@@ -327,17 +327,17 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     let string_utils_module = ruby.define_module("AttrStringUtils");
     let string_utils_rmodule = RModule::try_convert(string_utils_module)?;
 
-    string_utils_rmodule.define_module_function(
+    string_utils_rmodule.clone().define_module_function(
         "to_upper",
         __solidus_function_to_upper::wrapper(),
         __solidus_function_to_upper::ARITY,
     )?;
-    string_utils_rmodule.define_module_function(
+    string_utils_rmodule.clone().define_module_function(
         "reverse",
         __solidus_function_reverse::wrapper(),
         __solidus_function_reverse::ARITY,
     )?;
-    string_utils_rmodule.define_module_function(
+    string_utils_rmodule.clone().define_module_function(
         "repeat_join",
         __solidus_function_repeat_join::wrapper(),
         __solidus_function_repeat_join::ARITY,

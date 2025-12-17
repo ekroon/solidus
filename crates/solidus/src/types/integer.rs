@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{ReprValue, Value};
+use crate::value::{PinGuard, ReprValue, Value};
 
 /// Small integer that fits in a VALUE (immediate value).
 ///
@@ -19,7 +19,7 @@ use crate::value::{ReprValue, Value};
 /// let num = Fixnum::from_i64(42).expect("42 fits in a Fixnum");
 /// assert_eq!(num.to_i64(), 42);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct Fixnum(Value);
 
@@ -59,7 +59,7 @@ impl Fixnum {
     ///
     /// This always succeeds because all Fixnum values fit in i64.
     #[inline]
-    pub fn to_i64(self) -> i64 {
+    pub fn to_i64(&self) -> i64 {
         // SAFETY: self.0 is a valid Fixnum, rb_num2ll extracts the value
         unsafe { rb_sys::rb_num2ll(self.0.as_raw()) as i64 }
     }
@@ -67,8 +67,8 @@ impl Fixnum {
 
 impl ReprValue for Fixnum {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -282,7 +282,7 @@ impl IntoValue for usize {
 /// let big = RBignum::from_value(some_large_ruby_value).unwrap();
 /// let n = big.to_i64().unwrap();
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RBignum(Value);
 
@@ -295,14 +295,17 @@ impl RBignum {
     ///
     /// In practice, most i64 values will fit in a Fixnum, so this will often
     /// return None.
-    pub fn from_i64(n: i64) -> Option<Self> {
+    ///
+    /// Returns a `PinGuard<RBignum>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    pub fn from_i64(n: i64) -> Option<PinGuard<Self>> {
         // SAFETY: rb_ll2inum creates a Ruby integer (Fixnum or Bignum)
         let val = unsafe { rb_sys::rb_ll2inum(n as ::std::os::raw::c_longlong) };
         let val = unsafe { Value::from_raw(val) };
 
         // Check if it's actually a Bignum
         if val.rb_type() == crate::value::ValueType::Bignum {
-            Some(RBignum(val))
+            Some(PinGuard::new(RBignum(val)))
         } else {
             None
         }
@@ -313,14 +316,17 @@ impl RBignum {
     /// This uses Ruby's integer creation function which may return a Fixnum
     /// if the value fits, or a Bignum if it doesn't. Returns None if the
     /// result is not a Bignum.
-    pub fn from_u64(n: u64) -> Option<Self> {
+    ///
+    /// Returns a `PinGuard<RBignum>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    pub fn from_u64(n: u64) -> Option<PinGuard<Self>> {
         // SAFETY: rb_ull2inum creates a Ruby integer (Fixnum or Bignum)
         let val = unsafe { rb_sys::rb_ull2inum(n as ::std::os::raw::c_ulonglong) };
         let val = unsafe { Value::from_raw(val) };
 
         // Check if it's actually a Bignum
         if val.rb_type() == crate::value::ValueType::Bignum {
-            Some(RBignum(val))
+            Some(PinGuard::new(RBignum(val)))
         } else {
             None
         }
@@ -329,7 +335,7 @@ impl RBignum {
     /// Convert to i64.
     ///
     /// Returns an error if the value is out of range for i64.
-    pub fn to_i64(self) -> Result<i64, Error> {
+    pub fn to_i64(&self) -> Result<i64, Error> {
         // SAFETY: self.0 is a valid Bignum VALUE
         // rb_num2ll will raise a RangeError if the value is out of range,
         // which we should catch. For now, we'll use rb_big2ll which is more direct.
@@ -340,7 +346,7 @@ impl RBignum {
     /// Convert to u64.
     ///
     /// Returns an error if the value is negative or out of range for u64.
-    pub fn to_u64(self) -> Result<u64, Error> {
+    pub fn to_u64(&self) -> Result<u64, Error> {
         // SAFETY: self.0 is a valid Bignum VALUE
         let result = unsafe { rb_sys::rb_big2ull(self.0.as_raw()) };
         Ok(result as u64)
@@ -349,8 +355,8 @@ impl RBignum {
 
 impl ReprValue for RBignum {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -392,7 +398,7 @@ impl IntoValue for RBignum {
 ///
 /// assert_eq!(small.to_i64().unwrap(), 42);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Integer {
     /// Small integer (immediate value)
     Fixnum(Fixnum),
@@ -443,7 +449,7 @@ impl Integer {
     /// Convert to i64.
     ///
     /// Returns an error if the value is out of range for i64.
-    pub fn to_i64(self) -> Result<i64, Error> {
+    pub fn to_i64(&self) -> Result<i64, Error> {
         match self {
             Integer::Fixnum(f) => Ok(f.to_i64()),
             Integer::Bignum(b) => b.to_i64(),
@@ -453,7 +459,7 @@ impl Integer {
     /// Convert to u64.
     ///
     /// Returns an error if the value is negative or out of range for u64.
-    pub fn to_u64(self) -> Result<u64, Error> {
+    pub fn to_u64(&self) -> Result<u64, Error> {
         match self {
             Integer::Fixnum(f) => {
                 let n = f.to_i64();
@@ -471,7 +477,7 @@ impl Integer {
 
 impl ReprValue for Integer {
     #[inline]
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         match self {
             Integer::Fixnum(f) => f.as_value(),
             Integer::Bignum(b) => b.as_value(),

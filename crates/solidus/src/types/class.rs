@@ -22,7 +22,7 @@ use crate::value::{ReprValue, Value};
 /// let object_class = string_class.superclass().unwrap();
 /// assert_eq!(object_class.name().unwrap(), "Object");
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RClass(Value);
 
@@ -88,7 +88,7 @@ impl RClass {
     /// let string_class = RClass::from_name("String").unwrap();
     /// assert_eq!(string_class.name().unwrap(), "String");
     /// ```
-    pub fn name(self) -> Option<String> {
+    pub fn name(&self) -> Option<String> {
         // SAFETY: self.0 is a valid Ruby class VALUE
         let val = unsafe { rb_sys::rb_class_name(self.0.as_raw()) };
 
@@ -140,8 +140,8 @@ impl RClass {
 
 impl ReprValue for RClass {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]

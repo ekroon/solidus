@@ -4,38 +4,45 @@ use std::ffi::CStr;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{ReprValue, Value};
+use crate::value::{PinGuard, ReprValue, Value};
 
 /// Ruby String (heap allocated).
 ///
 /// Ruby strings are mutable byte sequences with an associated encoding.
 /// These are heap-allocated objects that require GC protection.
 ///
+/// This type is `!Copy` to prevent accidental heap storage. Values must be pinned
+/// on the stack using `pin_on_stack!` or explicitly stored using `BoxValue<RString>`.
+///
 /// # Example
 ///
 /// ```ignore
 /// use solidus::types::RString;
 ///
-/// let s = RString::new("hello");
-/// assert_eq!(s.len(), 5);
-/// assert_eq!(s.to_string().unwrap(), "hello");
+/// pin_on_stack!(s = RString::new("hello"));
+/// assert_eq!(s.get().len(), 5);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RString(Value);
 
 impl RString {
     /// Create a new Ruby string from a Rust string slice.
     ///
+    /// Returns a `PinGuard<RString>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello world");
-    /// assert_eq!(s.len(), 11);
+    /// let guard = RString::new("hello world");
+    /// pin_on_stack!(s = guard);
+    /// assert_eq!(s.get().len(), 11);
     /// ```
-    pub fn new(s: &str) -> Self {
+    pub fn new(s: &str) -> PinGuard<Self> {
         Self::from_slice(s.as_bytes())
     }
 
@@ -43,16 +50,21 @@ impl RString {
     ///
     /// The string will be created with binary encoding.
     ///
+    /// Returns a `PinGuard<RString>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    ///
     /// # Example
     ///
     /// ```ignore
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
     /// let bytes = b"hello\x00world";
-    /// let s = RString::from_slice(bytes);
-    /// assert_eq!(s.len(), 11);
+    /// let guard = RString::from_slice(bytes);
+    /// pin_on_stack!(s = guard);
+    /// assert_eq!(s.get().len(), 11);
     /// ```
-    pub fn from_slice(bytes: &[u8]) -> Self {
+    pub fn from_slice(bytes: &[u8]) -> PinGuard<Self> {
         // SAFETY: rb_str_new creates a new Ruby string with the given bytes
         let val = unsafe {
             rb_sys::rb_str_new(
@@ -61,7 +73,7 @@ impl RString {
             )
         };
         // SAFETY: rb_str_new returns a valid VALUE
-        RString(unsafe { Value::from_raw(val) })
+        PinGuard::new(RString(unsafe { Value::from_raw(val) }))
     }
 
     /// Get the length of the string in bytes.
@@ -75,7 +87,7 @@ impl RString {
     /// assert_eq!(s.len(), 5);
     /// ```
     #[inline]
-    pub fn len(self) -> usize {
+    pub fn len(&self) -> usize {
         // SAFETY: self.0 is a valid Ruby string VALUE
         unsafe { rb_sys::RSTRING_LEN(self.0.as_raw()) as usize }
     }
@@ -94,7 +106,7 @@ impl RString {
     /// assert!(!s2.is_empty());
     /// ```
     #[inline]
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
@@ -121,7 +133,7 @@ impl RString {
     ///     assert_eq!(bytes, b"hello");
     /// }
     /// ```
-    pub unsafe fn as_slice(self) -> &'static [u8] {
+    pub unsafe fn as_slice(&self) -> &'static [u8] {
         // SAFETY: Caller ensures string is valid and unmodified
         unsafe {
             let ptr = rb_sys::RSTRING_PTR(self.0.as_raw());
@@ -142,7 +154,7 @@ impl RString {
     /// let s = RString::new("hello");
     /// assert_eq!(s.to_string().unwrap(), "hello");
     /// ```
-    pub fn to_string(self) -> Result<String, Error> {
+    pub fn to_string(&self) -> Result<String, Error> {
         // SAFETY: We immediately copy the bytes, so they don't outlive the string
         let bytes = unsafe { self.as_slice() };
         String::from_utf8(bytes.to_vec()).map_err(|e| {
@@ -165,7 +177,7 @@ impl RString {
     /// let s = RString::new("hello");
     /// assert_eq!(s.to_bytes(), b"hello");
     /// ```
-    pub fn to_bytes(self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         // SAFETY: We immediately copy the bytes, so they don't outlive the string
         unsafe { self.as_slice().to_vec() }
     }
@@ -180,7 +192,7 @@ impl RString {
     /// let s = RString::new("hello");
     /// let enc = s.encoding();
     /// ```
-    pub fn encoding(self) -> Encoding {
+    pub fn encoding(&self) -> Encoding {
         // SAFETY: self.0 is a valid Ruby string VALUE
         let enc_ptr = unsafe { rb_sys::rb_enc_get(self.0.as_raw()) };
         Encoding { ptr: enc_ptr }
@@ -199,7 +211,7 @@ impl RString {
     /// let utf8 = Encoding::utf8();
     /// let encoded = s.encode(utf8).unwrap();
     /// ```
-    pub fn encode(self, encoding: Encoding) -> Result<RString, Error> {
+    pub fn encode(&self, encoding: Encoding) -> Result<RString, Error> {
         // SAFETY: self.0 is a valid Ruby string, encoding.ptr is a valid encoding
         let val = unsafe {
             let enc_value = rb_sys::rb_enc_from_encoding(encoding.ptr);
@@ -214,8 +226,8 @@ impl RString {
 
 impl ReprValue for RString {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -253,14 +265,18 @@ impl TryConvert for String {
 
 impl IntoValue for String {
     fn into_value(self) -> Value {
-        RString::new(&self).into_value()
+        let guard = RString::new(&self);
+        // SAFETY: We immediately convert to Value
+        unsafe { guard.into_inner().into_value() }
     }
 }
 
 // Convert string slices to Ruby strings
 impl IntoValue for &str {
     fn into_value(self) -> Value {
-        RString::new(self).into_value()
+        let guard = RString::new(self);
+        // SAFETY: We immediately convert to Value
+        unsafe { guard.into_inner().into_value() }
     }
 }
 
@@ -269,6 +285,8 @@ impl IntoValue for &str {
 /// This type represents a Ruby encoding object (rb_encoding).
 /// Ruby strings have an associated encoding that determines how
 /// bytes are interpreted as characters.
+///
+/// Encodings are immediate values in Ruby, so this type can be safely copied.
 ///
 /// # Example
 ///
@@ -279,7 +297,7 @@ impl IntoValue for &str {
 /// let s = RString::new("hello");
 /// let encoded = s.encode(enc).unwrap();
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Encoding {
     ptr: *mut rb_sys::rb_encoding,
 }
@@ -350,7 +368,7 @@ impl Encoding {
     /// let enc = Encoding::utf8();
     /// assert_eq!(enc.name(), "UTF-8");
     /// ```
-    pub fn name(self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         // SAFETY: The encoding pointer has a name field that points to a static string
         unsafe {
             let ptr = (*self.ptr).name;

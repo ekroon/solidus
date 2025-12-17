@@ -3,24 +3,24 @@
 ## Project Overview
 
 Solidus is a Rust library for writing Ruby extensions, designed as an alternative to Magnus.
-The key innovation is **automatic stack pinning** of Ruby values, eliminating the need for
-users to manually ensure values stay on the stack.
+The key innovation is **pinned-from-creation**: all Ruby VALUES must be pinned on the stack
+or explicitly boxed for the heap from the moment they're created, enforced at compile time.
 
 ## Design Principles
 
-1. **Safety by default**: Ruby values are stack-pinned via `Pin<&StackPinned<T>>` in method
-   signatures. Users cannot accidentally move values to the heap.
+1. **Safety by default**: All VALUE types are `!Copy`. Creation returns `PinGuard<T>` that
+   must be pinned on stack or boxed for heap. Compiler enforces what Magnus only documents.
 
 2. **Explicit heap allocation**: When heap storage is needed, users explicitly use `BoxValue<T>`,
-   which registers with Ruby's GC.
+   which registers with Ruby's GC. This is the ONLY way to store VALUEs on the heap.
 
-3. **Zero-cost abstractions**: Pinning has no runtime overhead - it's purely a compile-time
-   guarantee.
+3. **Zero-cost abstractions**: All safety checks are compile-time only. No runtime overhead.
 
-4. **Immediate values bypass pinning**: `Fixnum`, `Symbol`, `true`, `false`, `nil` don't need
-   GC protection and can be passed directly without pinning.
+4. **Immediate values optimized**: `Fixnum`, `Symbol`, `true`, `false`, `nil` remain `Copy`
+   as they don't need GC protection.
 
-5. **Clear error messages**: Prefer compile-time errors over runtime panics.
+5. **Clear error messages**: Prefer compile-time errors over runtime panics. The type system
+   prevents undefined behavior.
 
 ## Build/Test/Lint Commands
 
@@ -64,7 +64,8 @@ requiring Ruby for basic development.
 
 | Type | Purpose |
 |------|---------|
-| `Value` | Raw Ruby VALUE wrapper |
+| `Value` | Raw Ruby VALUE wrapper (`!Copy`) |
+| `PinGuard<T>` | Guard requiring pinning or boxing of new values |
 | `StackPinned<T>` | `!Unpin` wrapper for stack pinning |
 | `BoxValue<T>` | Heap-allocated, GC-registered wrapper |
 | `Ruby` | Handle to Ruby API (not `Copy`, passed by reference) |
@@ -73,17 +74,35 @@ requiring Ruby for basic development.
 ## Method Signature Patterns
 
 ```rust
-// Method with pinned argument (most common)
-fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<RString, Error>
+// Creating values - always returns PinGuard
+let guard = RString::new("hello");
+
+// Option 1: Pin on stack (common case)
+let pinned = guard.pin();
+pin_on_stack!(s = pinned);
+// s is Pin<&StackPinned<RString>>
+
+// Option 2: Box for heap (for collections)
+let boxed = guard.into_box();
+let mut values = vec![boxed];  // Safe!
+
+// Method with pinned argument
+fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
 
 // Method with immediate value (no pinning needed)  
-fn example(rb_self: RString, count: i64) -> Result<RString, Error>
+fn example(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error>
 
 // Method with mixed arguments
-fn example(rb_self: RString, count: i64, arg: Pin<&StackPinned<RString>>) -> Result<RString, Error>
+fn example(rb_self: RString, count: i64, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
 
 // Function (no self)
-fn example(arg: Pin<&StackPinned<RString>>) -> Result<RString, Error>
+fn example(arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
+
+// Using &self for methods (all VALUE methods use &self, not self)
+impl RString {
+    pub fn len(&self) -> usize;
+    pub fn to_string(&self) -> Result<String, Error>;
+}
 ```
 
 ## Testing Strategy

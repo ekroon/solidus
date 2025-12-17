@@ -12,39 +12,44 @@ A safe Rust library for writing Ruby extensions with automatic stack pinning.
 When writing Ruby extensions in Rust, Ruby values must stay on the stack so Ruby's garbage collector can find them. In other libraries like Magnus, accidentally moving values to the heap is undefined behavior:
 
 ```rust
-// This is UB - values moved to heap, invisible to Ruby GC
+// This is UB in Magnus - values moved to heap, invisible to Ruby GC
 let values: Vec<Value> = vec![ruby.str_new("hello")];
 ```
 
-This is error-prone, not enforced by the type system, and not visible at the API level.
+This is error-prone, not enforced by the type system, and not visible at the API level. See [Magnus issue #101](https://github.com/matsadler/magnus/issues/101) for details.
 
 ## The Solution
 
-Solidus uses Rust's `Pin` type to enforce stack locality at compile time:
+Solidus uses Rust's type system to enforce stack locality at compile time through **pinned-from-creation**:
+
+1. **All VALUE types are `!Copy`** - Cannot be accidentally copied to heap
+2. **Creation returns `PinGuard<T>`** - Must explicitly choose stack or heap storage
+3. **Compile-time enforcement** - Cannot forget to pin or box a value
 
 ```rust
 use solidus::prelude::*;
 
-// Method arguments are automatically stack-pinned
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
-    // `other` cannot be moved to heap - enforced by type system
-    rb_self.concat(other.get())
-}
+// Creating a value returns a PinGuard
+let guard = RString::new("hello");
 
-// Explicit opt-in for heap allocation
-fn store(arr: Pin<&StackPinned<RArray>>) -> Result<(), Error> {
-    let boxed: BoxValue<RString> = BoxValue::new(arr.get().entry(0)?);  // GC-registered
-    // boxed can safely be stored in Vec, HashMap, etc.
-    Ok(())
-}
+// Option 1: Pin on stack (common case)
+let pinned = guard.pin();
+pin_on_stack!(s = pinned);
+// s is Pin<&StackPinned<RString>>, cannot be moved to heap
+
+// Option 2: Box for heap storage (for collections)
+let guard = RArray::new();
+let boxed = guard.into_box();     // Explicit GC registration
+let mut values = vec![boxed];     // Safe! GC knows about it
 ```
 
-## Features
+## Key Features
 
-- **Safety by default**: Ruby values are stack-pinned via `Pin<&StackPinned<T>>`. Users cannot accidentally move values to the heap.
-- **Explicit heap allocation**: When heap storage is needed, use `BoxValue<T>`, which registers with Ruby's GC.
-- **Zero-cost abstractions**: Pinning has no runtime overhead - it's purely a compile-time guarantee.
-- **Immediate values bypass pinning**: `Fixnum`, `Symbol`, `true`, `false`, `nil` don't need GC protection.
+- **Safety by default**: Ruby values must be pinned from creation - enforced at compile time
+- **Clear API**: `PinGuard<T>` with `#[must_use]` makes requirements explicit
+- **Zero-cost abstractions**: All safety checks are compile-time only
+- **Immediate values optimized**: `Fixnum`, `Symbol`, `true`, `false`, `nil` remain `Copy`
+- **Prevents Magnus-style UB**: Compiler enforces what Magnus only documents
 
 ## Requirements
 

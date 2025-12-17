@@ -1,0 +1,126 @@
+// Test to investigate PinGuard → StackPinned safety
+// This tests whether StackPinned can escape to the heap
+
+use solidus::value::{PinGuard, StackPinned, Value};
+use solidus::pin_on_stack;
+
+// Test 1: Can we store StackPinned in a Vec? (This is the critical test)
+#[test]
+fn test_stackpinned_in_vec_compiles() {
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    let stack_pinned = guard.pin();
+    
+    // THE PROBLEM: This compiles!
+    let mut vec: Vec<StackPinned<Value>> = Vec::new();
+    vec.push(stack_pinned);
+    
+    // We just moved a "stack pinned" value to the heap!
+    // This defeats the entire purpose of StackPinned.
+    assert_eq!(vec.len(), 1);
+}
+
+// Test 2: Can we store StackPinned in a Box?
+#[test]
+fn test_stackpinned_in_box_compiles() {
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    let stack_pinned = guard.pin();
+    
+    // THE PROBLEM: This also compiles!
+    let boxed = Box::new(stack_pinned);
+    
+    // We just moved it to the heap!
+    drop(boxed);
+}
+
+// Test 3: Can we store StackPinned in a struct and move the struct?
+#[test]
+fn test_stackpinned_in_struct_compiles() {
+    struct Container {
+        field: StackPinned<Value>,
+    }
+    
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    let stack_pinned = guard.pin();
+    
+    // THE PROBLEM: This compiles!
+    let container = Container { field: stack_pinned };
+    let boxed = Box::new(container);
+    
+    // The "stack pinned" value is now on the heap inside the box!
+    drop(boxed);
+}
+
+// Test 4: Can we return StackPinned from a function?
+fn create_stackpinned() -> StackPinned<Value> {
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    guard.pin()
+}
+
+#[test]
+fn test_return_stackpinned_compiles() {
+    // THE PROBLEM: This compiles!
+    let stack_pinned = create_stackpinned();
+    
+    // The value was created in a different stack frame,
+    // but we have it here as if it's safe to use.
+    drop(stack_pinned);
+}
+
+// Test 5: The proper workflow with pin_on_stack!
+#[test]
+fn test_proper_workflow() {
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    let stack_pinned = guard.pin();
+    pin_on_stack!(pinned_ref = stack_pinned);
+    
+    // Now pinned_ref is Pin<&StackPinned<Value>>
+    // But wait - what's the difference between:
+    // 1. pin_on_stack!(pinned_ref = stack_pinned)  
+    //    -> Wraps stack_pinned in another StackPinned, then pins it
+    // 2. The stack_pinned value itself
+    //    -> Just a movable StackPinned
+    
+    // Check what pin_on_stack! actually produces:
+    let inner = pinned_ref.get_ref();
+    
+    // inner is &StackPinned<StackPinned<Value>> ??
+    // No actually, let's check the macro expansion
+    drop(inner);
+}
+
+// Test 6: Understanding the macro expansion
+#[test]
+fn test_macro_expansion() {
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    let stack_pinned = guard.pin();
+    
+    // Manually expand what pin_on_stack! does:
+    // pin_on_stack!(x = stack_pinned) expands to:
+    //   let x = StackPinned::new(stack_pinned);  // Wraps it again!
+    //   let mut x = x;
+    //   let x = unsafe { Pin::new_unchecked(&x) };
+    
+    // So we get: Pin<&StackPinned<StackPinned<Value>>>
+    // That's double-wrapped!
+    
+    pin_on_stack!(double_wrapped = stack_pinned);
+    let outer = double_wrapped.get_ref();  // &StackPinned<StackPinned<Value>>
+    
+    // To get to the Value, we need to unwrap twice, but StackPinned doesn't impl Clone!
+    // So we're stuck with &StackPinned<StackPinned<Value>>
+    drop(outer);
+}
+
+// Test 7: into_inner escape hatch
+#[test]
+fn test_into_inner_escape() {
+    let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+    let stack_pinned = guard.pin();
+    
+    // We can always escape with into_inner:
+    let value = stack_pinned.into_inner();
+    
+    // Now we have a raw Value that was never actually pinned on the stack!
+    // This defeats the entire purpose.
+    drop(value);
+}

@@ -62,14 +62,14 @@ impl<T: ReprValue> BoxValue<T> {
         BoxValue { ptr }
     }
 
-    /// Get the inner value.
+    /// Get a clone of the inner value.
     ///
-    /// Note: This returns a copy of the value (since T: Copy via ReprValue).
+    /// Note: This returns a clone of the value.
     /// The BoxValue continues to protect the value from GC.
     #[inline]
     pub fn get(&self) -> T {
         // SAFETY: ptr is always valid
-        unsafe { *self.ptr.as_ref() }
+        unsafe { self.ptr.as_ref().clone() }
     }
 
     /// Consume the BoxValue and return the inner value.

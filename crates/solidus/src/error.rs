@@ -72,7 +72,7 @@ impl ExceptionClass {
 }
 
 /// The class for a Ruby exception - either a built-in or custom class.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum ErrorClass {
     /// A built-in exception class (resolved lazily)
     BuiltIn(ExceptionClass),
@@ -82,10 +82,10 @@ enum ErrorClass {
 
 impl ErrorClass {
     /// Get the exception class as a VALUE.
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         match self {
             ErrorClass::BuiltIn(class) => class.as_value(),
-            ErrorClass::Custom(value) => value,
+            ErrorClass::Custom(value) => value.clone(),
         }
     }
 }

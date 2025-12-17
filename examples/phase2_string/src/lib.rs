@@ -12,17 +12,18 @@ use solidus::prelude::*;
 /// Demonstrates basic string creation from Rust string slices.
 #[no_mangle]
 pub extern "C" fn example_string_from_str() -> rb_sys::VALUE {
-    // Create a Ruby string from a &str
+    // Create a Ruby string from a &str - returns PinGuard<RString>
     let s = RString::new("Hello, Solidus!");
     
-    // Check basic properties
-    assert_eq!(s.len(), 15);
-    assert!(!s.is_empty());
+    // Check basic properties using as_ref() for temporary access
+    assert_eq!(s.as_ref().len(), 15);
+    assert!(!s.as_ref().is_empty());
     
     // Convert back to Rust String
-    let rust_string = s.to_string().unwrap();
+    let rust_string = s.as_ref().to_string().unwrap();
     assert_eq!(rust_string, "Hello, Solidus!");
     
+    // Convert PinGuard to VALUE for return
     s.into_value().as_raw()
 }
 
@@ -35,11 +36,11 @@ pub extern "C" fn example_empty_string() -> rb_sys::VALUE {
     let s = RString::new("");
     
     // Verify it's empty
-    assert_eq!(s.len(), 0);
-    assert!(s.is_empty());
+    assert_eq!(s.as_ref().len(), 0);
+    assert!(s.as_ref().is_empty());
     
     // Convert to Rust String
-    let rust_string = s.to_string().unwrap();
+    let rust_string = s.as_ref().to_string().unwrap();
     assert_eq!(rust_string, "");
     
     s.into_value().as_raw()
@@ -55,10 +56,10 @@ pub extern "C" fn example_string_from_bytes() -> rb_sys::VALUE {
     let s = RString::from_slice(bytes);
     
     // Length includes the null byte
-    assert_eq!(s.len(), 32);
+    assert_eq!(s.as_ref().len(), 32);
     
     // Get bytes back
-    let bytes_back = s.to_bytes();
+    let bytes_back = s.as_ref().to_bytes();
     assert_eq!(bytes_back, bytes);
     
     s.into_value().as_raw()
@@ -73,11 +74,11 @@ pub extern "C" fn example_utf8_string() -> rb_sys::VALUE {
     let s = RString::new("Hello 世界 🌍");
     
     // Get the byte length (UTF-8 encoded)
-    let byte_len = s.len();
+    let byte_len = s.as_ref().len();
     assert!(byte_len > 10); // Unicode chars take multiple bytes
     
     // Convert to Rust String preserving UTF-8
-    let rust_string = s.to_string().unwrap();
+    let rust_string = s.as_ref().to_string().unwrap();
     assert_eq!(rust_string, "Hello 世界 🌍");
     
     s.into_value().as_raw()
@@ -92,13 +93,13 @@ pub extern "C" fn example_binary_string() -> rb_sys::VALUE {
     let bytes = b"\xFF\xFE invalid UTF-8 \x80\x81";
     let s = RString::from_slice(bytes);
     
-    assert_eq!(s.len(), 21);
+    assert_eq!(s.as_ref().len(), 21);
     
     // to_string() will fail for invalid UTF-8
-    assert!(s.to_string().is_err());
+    assert!(s.as_ref().to_string().is_err());
     
     // to_bytes() always works
-    let bytes_back = s.to_bytes();
+    let bytes_back = s.as_ref().to_bytes();
     assert_eq!(bytes_back, bytes);
     
     s.into_value().as_raw()
@@ -113,7 +114,7 @@ pub extern "C" fn example_string_encoding() -> rb_sys::VALUE {
     let s = RString::new("Hello");
     
     // Get the encoding
-    let enc = s.encoding();
+    let enc = s.as_ref().encoding();
     let _enc_name = enc.name();
     
     // Default encoding is usually UTF-8
@@ -142,14 +143,14 @@ pub extern "C" fn example_encoding_conversion() -> rb_sys::VALUE {
     
     // Convert to UTF-8
     let utf8_enc = Encoding::utf8();
-    let utf8_str = s.encode(utf8_enc).unwrap();
+    let utf8_str = s.as_ref().encode(utf8_enc).unwrap();
     
     // Verify it's still the same content
     assert_eq!(utf8_str.to_string().unwrap(), "Hello");
     
     // Convert to ASCII-8BIT (binary)
     let binary_enc = Encoding::ascii_8bit();
-    let binary_str = s.encode(binary_enc).unwrap();
+    let binary_str = s.as_ref().encode(binary_enc).unwrap();
     
     assert_eq!(binary_str.to_bytes(), b"Hello");
     
@@ -168,13 +169,12 @@ pub extern "C" fn example_string_conversions(val: rb_sys::VALUE) -> rb_sys::VALU
         // Successfully converted - process it
         let upper = rust_string.to_uppercase();
         
-        // Convert back to Ruby string
-        let ruby_str = RString::new(&upper);
-        return ruby_str.into_value().as_raw();
+        // Convert back to Ruby string - PinGuard can be converted directly
+        return RString::new(&upper).into_value().as_raw();
     }
     
     // Not a string - return nil
-    Qnil::new().into_value().as_raw()
+    Qnil::new().as_value().as_raw()
 }
 
 /// Example 9: String with null bytes
@@ -187,10 +187,10 @@ pub extern "C" fn example_string_with_nulls() -> rb_sys::VALUE {
     let s = RString::from_slice(bytes);
     
     // Length includes null bytes
-    assert_eq!(s.len(), 19);
+    assert_eq!(s.as_ref().len(), 19);
     
     // All bytes are preserved
-    let bytes_back = s.to_bytes();
+    let bytes_back = s.as_ref().to_bytes();
     assert_eq!(bytes_back, bytes);
     assert_eq!(bytes_back[6], 0); // null byte at position 6
     assert_eq!(bytes_back[13], 0); // null byte at position 13
@@ -210,11 +210,11 @@ pub extern "C" fn example_string_roundtrip() -> rb_sys::VALUE {
     let ruby_str = RString::new(original);
     
     // Convert back to Rust
-    let roundtrip = ruby_str.to_string().unwrap();
+    let roundtrip = ruby_str.as_ref().to_string().unwrap();
     
     // Should be identical
     assert_eq!(roundtrip, original);
-    assert_eq!(ruby_str.len(), original.len());
+    assert_eq!(ruby_str.as_ref().len(), original.len());
     
     ruby_str.into_value().as_raw()
 }
@@ -236,15 +236,14 @@ pub extern "C" fn example_find_encoding() -> rb_sys::VALUE {
     // Non-existent encoding returns None
     assert!(Encoding::find("INVALID-ENCODING").is_none());
     
-    // Return a UTF-8 string
-    let s = RString::new("Encoding lookup works!");
-    s.into_value().as_raw()
+    // Return a UTF-8 string - can return PinGuard directly
+    RString::new("Encoding lookup works!").into_value().as_raw()
 }
 
 /// Example 12: Type-safe string handling
 ///
 /// Shows compile-time guarantees for string operations.
-fn concatenate_strings(s1: RString, s2: RString) -> Result<RString, Error> {
+fn concatenate_strings(s1: &RString, s2: &RString) -> Result<PinGuard<RString>, Error> {
     // Both strings are valid Ruby strings at compile time
     let str1 = s1.to_string()?;
     let str2 = s2.to_string()?;
@@ -258,12 +257,12 @@ pub extern "C" fn example_string_concatenation() -> rb_sys::VALUE {
     let s1 = RString::new("Hello");
     let s2 = RString::new("World");
     
-    match concatenate_strings(s1, s2) {
+    match concatenate_strings(s1.as_ref(), s2.as_ref()) {
         Ok(result) => {
-            assert_eq!(result.to_string().unwrap(), "Hello World");
+            assert_eq!(result.as_ref().to_string().unwrap(), "Hello World");
             result.into_value().as_raw()
         }
-        Err(_) => Qnil::new().into_value().as_raw(),
+        Err(_) => Qnil::new().as_value().as_raw(),
     }
 }
 
@@ -283,11 +282,13 @@ mod tests {
         // These tests verify compile-time behavior only
         // Tests requiring Ruby API calls need the Ruby runtime
         
-        // Verify RString is Copy (it's just a VALUE wrapper)
-        fn assert_copy<T: Copy>() {}
-        assert_copy::<RString>();
+        // RString is no longer Copy - it's !Copy to enforce pinning
+        // This test now verifies that RString is Clone but not Copy
+        fn assert_clone<T: Clone>() {}
+        assert_clone::<RString>();
         
-        // Verify Encoding is Copy
+        // Encoding is still Copy (it's immediate)
+        fn assert_copy<T: Copy>() {}
         assert_copy::<Encoding>();
     }
     

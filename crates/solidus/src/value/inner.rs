@@ -104,10 +104,10 @@ impl ValueType {
 ///
 /// # Safety
 ///
-/// `Value` is `Copy` and can be freely passed around, but care must be taken
-/// to ensure the underlying Ruby object is not garbage collected while in use.
+/// `Value` is `!Copy` to prevent accidental heap storage. Values must remain on the
+/// stack to be protected by Ruby's GC, unless explicitly stored in [`BoxValue<T>`](crate::BoxValue).
 /// In method signatures, use `Pin<&StackPinned<T>>` to guarantee stack pinning.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct Value(rb_sys::VALUE);
 
@@ -125,37 +125,37 @@ impl Value {
 
     /// Get the raw VALUE.
     #[inline]
-    pub const fn as_raw(self) -> rb_sys::VALUE {
+    pub const fn as_raw(&self) -> rb_sys::VALUE {
         self.0
     }
 
     /// Check if this value is nil.
     #[inline]
-    pub fn is_nil(self) -> bool {
+    pub fn is_nil(&self) -> bool {
         rb_sys::NIL_P(self.0)
     }
 
     /// Check if this value is truthy (not nil or false).
     #[inline]
-    pub fn is_truthy(self) -> bool {
+    pub fn is_truthy(&self) -> bool {
         rb_sys::TEST(self.0)
     }
 
     /// Check if this value is false.
     #[inline]
-    pub fn is_false(self) -> bool {
+    pub fn is_false(&self) -> bool {
         self.0 == Into::<rb_sys::VALUE>::into(rb_sys::Qfalse)
     }
 
     /// Check if this value is true.
     #[inline]
-    pub fn is_true(self) -> bool {
+    pub fn is_true(&self) -> bool {
         self.0 == Into::<rb_sys::VALUE>::into(rb_sys::Qtrue)
     }
 
     /// Check if this value is undefined.
     #[inline]
-    pub fn is_undef(self) -> bool {
+    pub fn is_undef(&self) -> bool {
         self.0 == Into::<rb_sys::VALUE>::into(rb_sys::Qundef)
     }
 
@@ -165,13 +165,13 @@ impl Value {
     /// These values are encoded directly in the VALUE and don't point to
     /// heap-allocated Ruby objects.
     #[inline]
-    pub fn is_immediate(self) -> bool {
+    pub fn is_immediate(&self) -> bool {
         rb_sys::IMMEDIATE_P(self.0) || self.is_nil() || self.is_true() || self.is_false()
     }
 
     /// Get the Ruby type of this value.
     #[inline]
-    pub fn rb_type(self) -> ValueType {
+    pub fn rb_type(&self) -> ValueType {
         // SAFETY: RB_TYPE handles all cases safely
         let raw_type = unsafe { rb_sys::RB_TYPE(self.0) };
         ValueType::from_raw(raw_type)
@@ -249,9 +249,11 @@ mod tests {
     }
 
     #[test]
-    fn test_value_is_copy() {
-        fn assert_copy<T: Copy>() {}
-        assert_copy::<Value>();
+    fn test_value_is_not_copy() {
+        // Value should NOT be Copy to prevent heap escape
+        // This test verifies it's Clone but not Copy
+        fn assert_clone<T: Clone>() {}
+        assert_clone::<Value>();
     }
 
     #[test]

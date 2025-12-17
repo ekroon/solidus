@@ -62,6 +62,7 @@ Phase 3 completed with comprehensive method registration:
 - Stage 8: Block Arguments (Deferred) - Support for Ruby blocks deferred to future work
 - Stage 9: Keyword Arguments (Deferred) - Support for Ruby keyword arguments deferred to future work
 - Stage 10: Integration and Polish (Complete) - Examples, documentation, and testing complete
+- **Stage 11: ADR-007 Implementation (Complete)** - All VALUE types are `!Copy`, `PinGuard<T>` enforces pinning from creation, methods use `&self` signatures
 
 All core acceptance criteria met:
 - `method!` and `function!` macros work for arities 0-4 (extensible to 15)
@@ -69,12 +70,15 @@ All core acceptance criteria met:
 - Method definition APIs available on Module trait and Ruby handle
 - `#[solidus::init]` generates correct init functions
 - Panic handling and error propagation work correctly
+- **All VALUE types are `!Copy` (ADR-007)**: Prevents accidental heap escape
+- **PinGuard pattern enforces safe creation**: All new values must be pinned or boxed
+- **Methods use `&self` instead of `self`**: Prevents moves of `!Copy` types
 - Comprehensive test coverage (192+ tests pass with Ruby)
 - Complete phase3_methods example demonstrating all features
 
-## Design Change: Pinned-From-Creation (ADR-007)
+## Design Change: Pinned-From-Creation (ADR-007) - ✅ COMPLETE
 
-**Date**: 2025-12-16
+**Date**: 2025-12-16 (Completed: 2025-12-17)
 
 A critical design flaw was identified in the implicit pinning approach used by the
 `#[solidus_macros::method]` and `#[solidus_macros::function]` attribute macros.
@@ -91,30 +95,48 @@ doesn't protect the escaped copy.
 
 See: https://github.com/matsadler/magnus/issues/101 for background discussion.
 
-### Solution (ADR-007)
+### Solution (ADR-007) - IMPLEMENTED
 
-**All Ruby VALUEs must be pinned from the moment of creation in Rust.**
+**All Ruby VALUEs are now pinned from the moment of creation in Rust.**
 
-This requires:
-1. VALUE types (`RString`, `RArray`, etc.) must be `!Copy`
-2. Creation functions must return types that enforce immediate pinning
-3. `BoxValue<T>` is the only way to store VALUEs on the heap
-4. Return values must remain pinned until returned to Ruby
+Implementation changes:
+1. ✅ All VALUE types (`RString`, `RArray`, etc.) are now `!Copy`
+2. ✅ Creation functions return `PinGuard<T>` that enforces immediate pinning or boxing
+3. ✅ `BoxValue<T>` is the only way to store VALUEs on the heap (GC-registered)
+4. ✅ Methods use `&self` instead of `self` to prevent moves
+5. ✅ All tests pass with the new safety model
 
-### Impact on Current Implementation
+### API Changes
 
-The following changes are needed:
-- **Phase 2 (Types)**: Remove `Copy` from all VALUE wrapper types
-- **Phase 3 (Methods)**: Reconsider/remove implicit pinning feature
-- **New work**: Redesign creation APIs to enforce immediate pinning
+**Before (unsafe)**:
+```rust
+let s = RString::new("hello"); // Copy-able, could be stored in Vec
+let arr = RArray::new();       // Copy-able, GC-unsafe
+```
 
-This is a **breaking change** from the current implementation. The existing code
-compiles but has the safety gap described above.
+**After (safe)**:
+```rust
+// Stack pinning (common case)
+let s_guard = RString::new("hello");
+let s = s_guard.pin();
+pin_on_stack!(s_ref = s);
+
+// Heap boxing (for collections)
+let arr_guard = RArray::new();
+let arr_boxed = arr_guard.into_box(); // GC-registered
+let mut values = vec![arr_boxed];     // Safe!
+```
+
+### Benefits
+
+- **Compile-time safety**: Cannot accidentally move VALUEs to heap without GC registration
+- **Clear API**: `PinGuard` with `#[must_use]` makes requirements explicit
+- **Zero runtime cost**: All safety checks are compile-time only
+- **Prevents Magnus-style UB**: See https://github.com/matsadler/magnus/issues/101
 
 ### Status
 
-Design accepted. Implementation pending. See [decisions.md](docs/plan/decisions.md)
-for the full ADR.
+✅ **COMPLETE** - All implementation tasks finished. See Stage 10 in phase-2-tasks.md.
 
 <!-- Add any relevant notes about progress, blockers, or decisions here -->
 

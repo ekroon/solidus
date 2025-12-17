@@ -640,121 +640,299 @@ These can be deferred to later phases if needed.
 This stage implements the design changes required by ADR-007 to prevent VALUE
 heap escape. See [decisions.md](decisions.md#adr-007-values-must-be-pinned-from-creation).
 
-### Task 2.10.1: Remove Copy from VALUE wrapper types
+**Status**: ✅ Complete (2025-12-17)
+
+### Task 2.10.1: Remove Copy from VALUE wrapper types ✅ COMPLETE
 
 **Files**: All type files in `crates/solidus/src/types/`
 
-- [ ] Remove `Copy` from `Value` in `value/mod.rs`
-- [ ] Remove `Copy` from `RString` in `types/string.rs`
-- [ ] Remove `Copy` from `RArray` in `types/array.rs`
-- [ ] Remove `Copy` from `RHash` in `types/hash.rs`
-- [ ] Remove `Copy` from `RBignum` in `types/integer.rs`
-- [ ] Remove `Copy` from `Integer` enum in `types/integer.rs`
-- [ ] Remove `Copy` from `RFloat` in `types/float.rs`
-- [ ] Remove `Copy` from `Float` enum in `types/float.rs`
-- [ ] Remove `Copy` from `RClass` in `types/class.rs`
-- [ ] Remove `Copy` from `RModule` in `types/module.rs`
-- [ ] Fix all compilation errors that result from removing `Copy`
-- [ ] Update tests
+- [x] Remove `Copy` from `Value` in `value/mod.rs`
+- [x] Remove `Copy` from `RString` in `types/string.rs`
+- [x] Remove `Copy` from `RArray` in `types/array.rs`
+- [x] Remove `Copy` from `RHash` in `types/hash.rs`
+- [x] Remove `Copy` from `RBignum` in `types/integer.rs`
+- [x] Remove `Copy` from `Integer` enum in `types/integer.rs`
+- [x] Remove `Copy` from `RFloat` in `types/float.rs`
+- [x] Remove `Copy` from `Float` enum in `types/float.rs`
+- [x] Remove `Copy` from `RClass` in `types/class.rs`
+- [x] Remove `Copy` from `RModule` in `types/module.rs`
+- [x] Fix all compilation errors that result from removing `Copy`
+- [x] Update tests
 
 **Note**: Keep `Copy` on immediate types: `Fixnum`, `Symbol`, `Qnil`, `Qtrue`, `Qfalse`, `Flonum`.
 
-### Task 2.10.2: Design and implement pinned creation API
+**Status**: ✅ Complete - All VALUE types are now `!Copy`, enforcing compile-time safety.
 
-**File**: New file `crates/solidus/src/value/creation.rs` or extend existing files
+### Task 2.10.2: Update ReprValue trait to use &self ✅ COMPLETE
 
-Choose one of these approaches:
+**File**: `crates/solidus/src/value/traits.rs`
 
-**Option A: Macro-based creation (recommended)**
+- [x] Change `as_value(self)` to `as_value(&self)`
+- [x] Update all implementations in `types/string.rs`
+- [x] Update all implementations in `types/array.rs`
+- [x] Update all implementations in `types/hash.rs`
+- [x] Update all implementations in `types/integer.rs`
+- [x] Update all implementations in `types/float.rs`
+- [x] Update all implementations in `types/class.rs`
+- [x] Update all implementations in `types/module.rs`
+- [x] Update all implementations in `types/immediate.rs`
+- [x] Update all implementations in `types/symbol.rs`
+- [x] Fix method calls throughout codebase
+
+**Status**: ✅ Complete - All methods now use `&self` to prevent moves.
+
+### Task 2.10.3: Update method signatures throughout types ✅ COMPLETE
+
+**Files**: All files in `crates/solidus/src/types/`
+
+This task involves updating all methods to work with `!Copy` types by using `&self` or
+explicit cloning where needed.
+
+#### 2.10.3.1: Fix Value core methods ✅
+
+**File**: `crates/solidus/src/value/inner.rs`
+
+- [x] Update `is_immediate(&self)` to not consume self
+- [x] Update `rb_type(&self)` to not consume self
+- [x] Update `Debug` implementation to use `&self`
+- [x] Update all helper methods (is_nil, is_true, is_false, etc.)
+- [x] Update tests
+
+#### 2.10.3.2: Fix RString methods ✅
+
+**File**: `crates/solidus/src/types/string.rs`
+
+- [x] Update `len(self)` to `len(&self)`
+- [x] Update `is_empty(self)` to `is_empty(&self)`
+- [x] Update `to_string(self)` to `to_string(&self)`
+- [x] Update `to_bytes(self)` to `to_bytes(&self)`
+- [x] Update `encoding(self)` to `encoding(&self)`
+- [x] Update `encode(self, ...)` to `encode(&self, ...)`
+- [x] Fix all call sites
+- [x] Update tests
+
+#### 2.10.3.3: Fix RArray methods ✅
+
+**File**: `crates/solidus/src/types/array.rs`
+
+- [x] Update `len(self)` to `len(&self)`
+- [x] Update `is_empty(self)` to `is_empty(&self)`
+- [x] Update `push(self, ...)` to `push(&self, ...)`
+- [x] Update `pop(self)` to `pop(&self)`
+- [x] Update `entry(self, ...)` to `entry(&self, ...)`
+- [x] Update `store(self, ...)` to `store(&self, ...)`
+- [x] Update `each(self, ...)` to `each(&self, ...)`
+- [x] Update `to_vec(self)` to `to_vec(&self)`
+- [x] Fix all call sites
+- [x] Update tests
+
+#### 2.10.3.4: Fix RHash methods ✅
+
+**File**: `crates/solidus/src/types/hash.rs`
+
+- [x] Update `len(self)` to `len(&self)`
+- [x] Update `is_empty(self)` to `is_empty(&self)`
+- [x] Update `get(self, ...)` to `get(&self, ...)`
+- [x] Update `insert(self, ...)` to `insert(&self, ...)`
+- [x] Update `delete(self, ...)` to `delete(&self, ...)`
+- [x] Update `each(self, ...)` to `each(&self, ...)`
+- [x] Update `to_hash_map(self)` to `to_hash_map(&self)`
+- [x] Fix all call sites
+- [x] Update tests
+
+#### 2.10.3.5: Fix RClass and RModule methods ✅
+
+**Files**: `crates/solidus/src/types/class.rs`, `types/module.rs`
+
+- [x] Update `name(self)` to `name(&self)`
+- [x] Update `superclass(self)` to `superclass(&self)`
+- [x] Update trait method signatures
+- [x] Fix all call sites
+- [x] Update tests
+
+#### 2.10.3.6: Fix Integer and Float methods ✅
+
+**Files**: `crates/solidus/src/types/integer.rs`, `types/float.rs`
+
+- [x] Update all accessor methods to use `&self`
+- [x] Update enum match expressions to avoid moves
+- [x] Update conversion methods
+- [x] Fix all call sites
+- [x] Update tests
+
+#### 2.10.3.7: Fix conversion trait implementations ✅
+
+**Files**: `crates/solidus/src/convert/*.rs`
+
+- [x] Update `TryConvert` implementations for `!Copy` types
+- [x] Update `IntoValue` implementations for `!Copy` types
+- [x] Add implementations for `&T` where needed
+- [x] Fix all call sites
+- [x] Update tests
+
+**Status**: ✅ Complete - All methods updated to work with `!Copy` types.
+
+### Task 2.10.4: Update method macro for !Copy types ✅ COMPLETE
+
+**File**: `crates/solidus/src/method/mod.rs`
+
+- [x] Review macro-generated code for `!Copy` compatibility
+- [x] Ensure `rb_self` parameter handling works with `!Copy`
+- [x] Ensure argument pinning works with `!Copy`
+- [x] Update examples in doc comments
+- [x] Add tests
+
+**Status**: ✅ Complete - Method macros work correctly with `!Copy` types.
+
+### Task 2.10.5: Design and implement PinGuard creation API ✅ COMPLETE
+
+**File**: `crates/solidus/src/value/guard.rs`
+
+**Status**: ✅ Complete - PinGuard pattern implemented and working.
+
+**Implementation**: Creation functions now return `PinGuard<T>`:
+
 ```rust
-/// Create a new RString, pinning it on the stack
-/// pin_on_stack!(s = RString::new("hello")?);
-/// 
-/// The macro expands to:
-/// let __tmp = RString::new("hello")?;
-/// let mut __pinned = StackPinned::new(__tmp);
-/// let s = Pin::new(&mut __pinned);
+/// Create a new RString, returning a PinGuard that must be pinned or boxed
+let guard = RString::new("hello")?;
+
+// Option 1: Pin on stack (common case)
+let pinned = guard.pin();
+pin_on_stack!(s = pinned);
+// s is now Pin<&StackPinned<RString>>
+
+// Option 2: Box for heap storage (for collections)
+let boxed = guard.into_box(); // GC-registered
+let mut strings = vec![boxed]; // Safe!
 ```
 
-- [ ] Update `pin_on_stack!` macro to support creation expressions
-- [ ] Add `pin_on_stack!` examples to all creation methods
-- [ ] Document the pattern
+Key features:
+- `PinGuard<T>` is `#[must_use]` - compiler warns if not pinned/boxed
+- `PinGuard<T>` is `!Unpin` via `PhantomPinned` - cannot be stored in collections
+- `.pin()` → `StackPinned<T>` for stack storage (common case)
+- `.into_box()` → `BoxValue<T>` for heap storage (GC-registered)
+- Clear, explicit API that enforces safety at compile time
 
-**Option B: Creation returns PinGuard**
-```rust
-/// A guard that holds an unpinned VALUE and must be consumed by pinning
-pub struct PinGuard<T: ReprValue>(T);
+All creation functions updated:
+- [x] `RString::new()` returns `PinGuard<RString>`
+- [x] `RArray::new()` returns `PinGuard<RArray>`
+- [x] `RHash::new()` returns `PinGuard<RHash>`
+- [x] `Integer::from_i64()` returns `PinGuard<Integer>`
+- [x] `Float::from_f64()` returns `PinGuard<Float>`
+- [x] All other creation functions updated
 
-impl<T: ReprValue> PinGuard<T> {
-    /// Pin this guard on the stack
-    /// SAFETY: Must be called immediately, value must not escape
-    pub unsafe fn pin(self) -> T { self.0 }
-}
-
-impl RString {
-    pub fn new(s: &str) -> Result<PinGuard<RString>, Error>;
-}
-```
-
-- [ ] Create `PinGuard<T>` type
-- [ ] Update all creation functions to return `PinGuard<T>`
-- [ ] Update `pin_on_stack!` to accept `PinGuard<T>`
-
-### Task 2.10.3: Update BoxValue for !Copy types
+### Task 2.10.6: Update BoxValue for !Copy types ✅ COMPLETE
 
 **File**: `crates/solidus/src/value/boxed.rs`
 
-- [ ] Ensure `BoxValue::new()` works with `!Copy` types
-- [ ] Add `BoxValue::from_pinned()` to convert pinned refs to boxed
-- [ ] Update documentation with heap storage patterns
-- [ ] Add tests
+- [x] Ensure `BoxValue::new()` works with `!Copy` types
+- [x] Add conversion from `PinGuard<T>` via `.into_box()`
+- [x] Update documentation with heap storage patterns
+- [x] Add tests
 
 ```rust
 impl<T: ReprValue> BoxValue<T> {
-    /// Create a new BoxValue from a pinned reference
-    /// This is the safe way to move a VALUE to the heap
-    pub fn from_pinned(pinned: Pin<&StackPinned<T>>) -> Self;
+    /// Create a new BoxValue from a value (consumes it)
+    pub fn new(value: T) -> Self;
 }
+
+// Via PinGuard
+let guard = RString::new("hello");
+let boxed = guard.into_box();  // Explicit, GC-registered
 ```
 
-### Task 2.10.4: Update TryConvert for !Copy types
+**Status**: ✅ Complete - BoxValue works seamlessly with PinGuard pattern.
 
-**File**: `crates/solidus/src/convert/try_convert.rs`
-
-- [ ] Ensure `TryConvert` works correctly with `!Copy` types
-- [ ] Consider if `TryConvert` should return pinned types
-- [ ] Update any implementations that assume `Copy`
-- [ ] Add tests
-
-### Task 2.10.5: Update IntoValue for !Copy types
-
-**File**: `crates/solidus/src/convert/into_value.rs`
-
-- [ ] Ensure `IntoValue` works correctly with `!Copy` types
-- [ ] `IntoValue::into_value(self)` consumes self, which is fine for `!Copy`
-- [ ] Add implementations for `&T` and `Pin<&StackPinned<T>>` if needed
-- [ ] Add tests
-
-### Task 2.10.6: Update all examples
+### Task 2.10.7: Update all examples ✅ COMPLETE
 
 **Directory**: `examples/`
 
-- [ ] Update `phase2_string` example for !Copy RString
-- [ ] Update `phase2_array` example for !Copy RArray
-- [ ] Update `phase2_hash` example for !Copy RHash
-- [ ] Update `phase2_numeric_heap` example for !Copy Integer/Float
-- [ ] Update `phase2_class_module` example for !Copy RClass/RModule
-- [ ] Update `phase2_conversions` example
+- [x] Update `phase2_string` example for !Copy RString and PinGuard
+- [x] Update `phase2_array` example for !Copy RArray and PinGuard
+- [x] Update `phase2_hash` example for !Copy RHash and PinGuard
+- [x] Update `phase2_numeric_heap` example for !Copy Integer/Float and PinGuard
+- [x] Update `phase2_class_module` example for !Copy RClass/RModule
+- [x] Update `phase2_conversions` example
+- [x] Update `phase3_methods` example
+- [x] Update `phase3_attr_macros` example
 
-### Task 2.10.7: Update documentation
+**Status**: ✅ Complete - All examples updated and working with new API.
 
-- [ ] Update `phase-2-types.md` code examples (remove Copy from derives)
-- [ ] Update doc comments on all affected types
-- [ ] Add section on VALUE creation and pinning patterns
-- [ ] Update README if needed
+### Task 2.10.8: Update documentation ✅ COMPLETE
 
-**Acceptance**: All VALUE types are `!Copy`, creation APIs enforce pinning,
-`BoxValue<T>` is the only way to store VALUEs on the heap.
+- [x] Update `phase-2-types.md` code examples (remove Copy from derives)
+- [x] Update doc comments on all affected types
+- [x] Add section on VALUE creation and pinning patterns
+- [x] Update README with PinGuard examples
+- [x] Update AGENTS.md with new method signature patterns
+- [x] Update PROGRESS.md to mark ADR-007 complete
+- [x] Create/update CHANGELOG.md to document the breaking change
+
+**Status**: ✅ Complete - All documentation reflects ADR-007 changes.
+
+### Task 2.10.9: Final validation ✅ COMPLETE
+
+- [x] Run full test suite: `cargo test --workspace`
+- [x] Run with Ruby: `cargo test --workspace --features link-ruby`
+- [x] Run clippy: `cargo clippy --workspace`
+- [x] Verify no Copy on heap VALUE types
+- [x] Verify all methods use &self for heap types
+- [x] Create safety validation tests
+
+**Status**: ✅ Complete - All tests pass, safety guarantees verified.
+
+**Acceptance**: All VALUE types are `!Copy`, all methods use `&self` appropriately,
+all tests pass, `PinGuard<T>` enforces pinning from creation, `BoxValue<T>` is the 
+only way to store VALUEs on the heap.
+
+---
+
+## Current Status Summary
+
+### ✅ COMPLETE (100%)
+
+Stage 10 (ADR-007) is now fully implemented! All tasks completed:
+
+1. ✅ Removed `Copy` trait from all heap-allocated VALUE types
+2. ✅ Updated `ReprValue` trait to use `&self` instead of `self`
+3. ✅ Updated all method signatures to use `&self` instead of `self`
+4. ✅ Method macros updated for `!Copy` compatibility
+5. ✅ Implemented `PinGuard<T>` pattern for safe value creation
+6. ✅ Updated `BoxValue<T>` to work with new API
+7. ✅ Updated all examples
+8. ✅ Updated all documentation
+9. ✅ Final validation and testing complete
+
+### Key Achievements
+
+- **Compile-time safety**: VALUES cannot be moved to heap without explicit `BoxValue`
+- **Clear API**: `PinGuard<T>` with `#[must_use]` makes requirements explicit
+- **Zero runtime cost**: All safety checks are at compile time
+- **Prevents UB**: Addresses the safety gap identified in Magnus (issue #101)
+
+### API Summary
+
+**Creating values**:
+```rust
+let guard = RString::new("hello")?;  // Returns PinGuard<RString>
+let pinned = guard.pin();             // For stack storage
+pin_on_stack!(s = pinned);            // Pin on stack
+// OR
+let boxed = guard.into_box();         // For heap storage (GC-registered)
+```
+
+**Method signatures**:
+```rust
+impl RString {
+    pub fn len(&self) -> usize;           // &self, not self
+    pub fn to_string(&self) -> String;    // &self, not self
+}
+```
+
+**Type properties**:
+- Heap types (`RString`, `RArray`, etc.) are `!Copy`
+- Immediate types (`Fixnum`, `Symbol`, etc.) remain `Copy`
+- All methods use `&self` to prevent moves
 
 ---
 

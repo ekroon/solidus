@@ -21,7 +21,7 @@ use crate::value::{ReprValue, Value, ValueType};
 /// let sym = Symbol::new("hello");
 /// assert_eq!(sym.name().unwrap(), "hello");
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct Symbol(Value);
 
@@ -56,7 +56,7 @@ impl Symbol {
     /// # Errors
     ///
     /// Returns an error if the symbol name contains invalid UTF-8.
-    pub fn name(self) -> Result<String, Error> {
+    pub fn name(&self) -> Result<String, Error> {
         // SAFETY: rb_sym2str converts symbol to string
         let str_val = unsafe { Value::from_raw(rb_sys::rb_sym2str(self.0.as_raw())) };
 
@@ -79,8 +79,8 @@ impl Symbol {
 
 impl ReprValue for Symbol {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]

@@ -41,7 +41,7 @@ pub struct StackPinned<T> {
 // PhantomPinned is exactly what we want.
 
 impl<T> StackPinned<T> {
-    /// Create a new StackPinned wrapper.
+    /// Create a new StackPinned wrapper directly.
     ///
     /// This should typically be used via the `pin_on_stack!` macro
     /// which handles the pinning automatically.
@@ -89,45 +89,65 @@ impl<T> StackPinned<T> {
 
 /// Create a stack-pinned value.
 ///
-/// This macro creates a `StackPinned<T>` on the stack and pins it,
-/// returning a `Pin<&StackPinned<T>>` reference.
+/// This macro accepts `PinGuard<T>` expressions from value creation
+/// (e.g., `RString::new("hello")`).
 ///
-/// # Example
+/// The macro atomically consumes the guard and creates a pinned reference,
+/// preventing the safety gap where `StackPinned<T>` could be moved to the heap.
+///
+/// # Examples
 ///
 /// ```ignore
 /// use solidus::pin_on_stack;
+/// use solidus::types::RString;
 ///
-/// // Pin a Ruby string on the stack
-/// pin_on_stack!(pinned_str = ruby_string);
-///
-/// // pinned_str is now Pin<&StackPinned<RString>>
-/// let inner: &RString = pinned_str.get();
+/// // Pin a newly created value
+/// pin_on_stack!(s = RString::new("hello"));
+/// // s is Pin<&StackPinned<RString>>
 /// ```
+///
+/// # Safety
+///
+/// The macro ensures that:
+/// - Values are pinned atomically with guard consumption
+/// - No intermediate movable `StackPinned<T>` value exists
+/// - The pinned value cannot be moved to the heap
 #[macro_export]
 macro_rules! pin_on_stack {
-    ($name:ident = $value:expr) => {
-        let $name = $crate::value::StackPinned::new($value);
+    // Pattern for direct value wrapping and pinning
+    ($name:ident = $guard:expr) => {
+        let __guard = $guard;
+        // Use IntoPinnable trait to extract the value (helps with type inference in macros)
+        // SAFETY: We immediately wrap in StackPinned and pin it
+        let __value = unsafe { $crate::value::IntoPinnable::into_pinnable(__guard) };
+        let __stack = $crate::value::StackPinned::new(__value);
         // SAFETY: We're pinning a value on the stack. The value cannot
         // be moved because we immediately shadow the binding with a Pin.
         #[allow(unused_mut)]
-        let mut $name = $name;
+        let mut __stack = __stack;
         #[allow(unused_unsafe)]
-        let $name = unsafe { ::std::pin::Pin::new_unchecked(&$name) };
+        let $name = unsafe { ::std::pin::Pin::new_unchecked(&__stack) };
     };
-    (mut $name:ident = $value:expr) => {
-        let $name = $crate::value::StackPinned::new($value);
+    // Pattern for mutable direct value wrapping and pinning
+    (mut $name:ident = $guard:expr) => {
+        let __guard = $guard;
+        // Use IntoPinnable trait to extract the value (helps with type inference in macros)
+        // SAFETY: We immediately wrap in StackPinned and pin it
+        let __value = unsafe { $crate::value::IntoPinnable::into_pinnable(__guard) };
+        let __stack = $crate::value::StackPinned::new(__value);
         // SAFETY: We're pinning a value on the stack. The value cannot
         // be moved because we immediately shadow the binding with a Pin.
         #[allow(unused_mut)]
-        let mut $name = $name;
+        let mut __stack = __stack;
         #[allow(unused_unsafe)]
-        let $name = unsafe { ::std::pin::Pin::new_unchecked(&mut $name) };
+        let $name = unsafe { ::std::pin::Pin::new_unchecked(&mut __stack) };
     };
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
 
     #[test]
     fn test_stack_pinned_get() {
@@ -157,17 +177,30 @@ mod tests {
 
     #[test]
     fn test_pin_on_stack_macro() {
-        pin_on_stack!(value = 42i32);
-        assert_eq!(*StackPinned::get(value), 42);
+        // Test with PinGuard
+        use crate::value::PinGuard;
+        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        pin_on_stack!(value = guard);
+        assert!(value.get().is_nil());
     }
 
     #[test]
     fn test_pin_on_stack_macro_mut() {
-        pin_on_stack!(mut value = 42i32);
-        let mut value = value;
-        *StackPinned::get_mut(value.as_mut()) = 100;
-        let value = value.as_ref();
-        assert_eq!(*StackPinned::get(value), 100);
+        // Test with PinGuard (mutable)
+        use crate::value::PinGuard;
+        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        pin_on_stack!(mut value = guard);
+        // Just check that it works - convert to immutable ref to call get()
+        assert!(value.as_ref().get().is_nil());
+    }
+
+    #[test]
+    fn test_pin_on_stack_with_value() {
+        // Test pinning a Value via PinGuard
+        use crate::value::PinGuard;
+        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        pin_on_stack!(value = guard);
+        assert!(value.get().is_nil());
     }
 
     // This test verifies that StackPinned is !Unpin by demonstrating

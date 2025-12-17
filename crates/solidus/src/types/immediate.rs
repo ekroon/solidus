@@ -19,7 +19,7 @@ use crate::value::{ReprValue, Value};
 /// let nil = Qnil::new();
 /// assert!(nil.as_value().is_nil());
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Qnil;
 
 impl Qnil {
@@ -38,7 +38,7 @@ impl Default for Qnil {
 
 impl ReprValue for Qnil {
     #[inline]
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         Value::nil()
     }
 
@@ -77,7 +77,7 @@ impl IntoValue for Qnil {
 /// let t = Qtrue::new();
 /// assert!(t.as_value().is_true());
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Qtrue;
 
 impl Qtrue {
@@ -96,7 +96,7 @@ impl Default for Qtrue {
 
 impl ReprValue for Qtrue {
     #[inline]
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         Value::r#true()
     }
 
@@ -135,7 +135,7 @@ impl IntoValue for Qtrue {
 /// let f = Qfalse::new();
 /// assert!(f.as_value().is_false());
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Qfalse;
 
 impl Qfalse {
@@ -154,7 +154,7 @@ impl Default for Qfalse {
 
 impl ReprValue for Qfalse {
     #[inline]
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         Value::r#false()
     }
 

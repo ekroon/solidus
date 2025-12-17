@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{ReprValue, Value, ValueType};
+use crate::value::{PinGuard, ReprValue, Value, ValueType};
 
 /// Immediate float value (only on 64-bit platforms).
 ///
@@ -21,7 +21,7 @@ use crate::value::{ReprValue, Value, ValueType};
 /// assert!((num.to_f64() - 3.14).abs() < 0.001);
 /// ```
 #[cfg(target_pointer_width = "64")]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct Flonum(Value);
 
@@ -45,7 +45,7 @@ impl Flonum {
 
     /// Get the value as f64.
     #[inline]
-    pub fn to_f64(self) -> f64 {
+    pub fn to_f64(&self) -> f64 {
         // SAFETY: self.0 is a valid Flonum, rb_float_value extracts the value
         unsafe { rb_sys::rb_float_value(self.0.as_raw()) }
     }
@@ -54,8 +54,8 @@ impl Flonum {
 #[cfg(target_pointer_width = "64")]
 impl ReprValue for Flonum {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -98,7 +98,7 @@ impl IntoValue for Flonum {
 /// let num = RFloat::from_f64(3.14159265358979);
 /// assert!((num.to_f64() - 3.14159265358979).abs() < 0.0001);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RFloat(Value);
 
@@ -107,15 +107,18 @@ impl RFloat {
     ///
     /// This always creates a heap-allocated float. On 64-bit platforms,
     /// if the value can be represented as a Flonum, use `Flonum::from_f64` instead.
-    pub fn from_f64(n: f64) -> Self {
+    ///
+    /// Returns a `PinGuard<RFloat>` that must be pinned on the stack
+    /// or boxed on the heap for GC safety.
+    pub fn from_f64(n: f64) -> PinGuard<Self> {
         // SAFETY: rb_float_new creates a Float VALUE
         let val = unsafe { Value::from_raw(rb_sys::rb_float_new(n)) };
-        RFloat(val)
+        PinGuard::new(RFloat(val))
     }
 
     /// Get the value as f64.
     #[inline]
-    pub fn to_f64(self) -> f64 {
+    pub fn to_f64(&self) -> f64 {
         // SAFETY: self.0 is a valid Float, rb_float_value extracts the value
         unsafe { rb_sys::rb_float_value(self.0.as_raw()) }
     }
@@ -123,8 +126,8 @@ impl RFloat {
 
 impl ReprValue for RFloat {
     #[inline]
-    fn as_value(self) -> Value {
-        self.0
+    fn as_value(&self) -> Value {
+        self.0.clone()
     }
 
     #[inline]
@@ -167,7 +170,7 @@ impl IntoValue for RFloat {
 ///
 /// assert!((small.to_f64() - 1.5).abs() < 0.001);
 /// ```
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Float {
     #[cfg(target_pointer_width = "64")]
     /// Immediate float (64-bit only)
@@ -187,18 +190,20 @@ impl Float {
             if let Some(flonum) = Flonum::from_f64(n) {
                 Float::Flonum(flonum)
             } else {
-                Float::RFloat(RFloat::from_f64(n))
+                // SAFETY: We need to unwrap the PinGuard to return Self
+                Float::RFloat(unsafe { RFloat::from_f64(n).into_inner() })
             }
         }
         #[cfg(not(target_pointer_width = "64"))]
         {
-            Float::RFloat(RFloat::from_f64(n))
+            // SAFETY: We need to unwrap the PinGuard to return Self
+            Float::RFloat(unsafe { RFloat::from_f64(n).into_inner() })
         }
     }
 
     /// Get the value as f64.
     #[inline]
-    pub fn to_f64(self) -> f64 {
+    pub fn to_f64(&self) -> f64 {
         match self {
             #[cfg(target_pointer_width = "64")]
             Float::Flonum(f) => f.to_f64(),
@@ -209,7 +214,7 @@ impl Float {
 
 impl ReprValue for Float {
     #[inline]
-    fn as_value(self) -> Value {
+    fn as_value(&self) -> Value {
         match self {
             #[cfg(target_pointer_width = "64")]
             Float::Flonum(f) => f.as_value(),
