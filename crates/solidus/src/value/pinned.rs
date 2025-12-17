@@ -1,6 +1,7 @@
 //! Stack-pinned wrapper for Ruby values.
 
 use std::marker::PhantomPinned;
+use std::ops::Deref;
 use std::pin::Pin;
 
 /// A wrapper that prevents a value from being unpinned.
@@ -84,6 +85,15 @@ impl<T> StackPinned<T> {
     #[inline]
     pub fn into_inner(self) -> T {
         self.value
+    }
+}
+
+impl<T> Deref for StackPinned<T> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
 }
 
@@ -230,5 +240,21 @@ mod tests {
         //   error: the trait bound `StackPinned<i32>: Unpin` is not satisfied
 
         // The fact that this test compiles and runs proves StackPinned is !Unpin
+    }
+
+    #[test]
+    fn test_stack_pinned_deref() {
+        // Test that Deref allows accessing inner value through Pin<&StackPinned<T>>
+        let pinned = StackPinned::new(String::from("hello"));
+        // SAFETY: We're pinning on the stack in this test
+        let pinned = unsafe { Pin::new_unchecked(&pinned) };
+
+        // Auto-deref chain: Pin<&StackPinned<String>> -> &StackPinned<String> -> &String
+        // This should work via Deref without calling .get()
+        assert_eq!(pinned.len(), 5);
+        assert!(pinned.starts_with("hel"));
+
+        // Verify .get() still works for explicit access
+        assert_eq!(pinned.get(), "hello");
     }
 }
