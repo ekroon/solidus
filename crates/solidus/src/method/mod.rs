@@ -543,7 +543,7 @@ mod tests {
         let val = unsafe { Value::from_raw(42 as rb_sys::VALUE) };
         let test = TestType::try_convert(val).unwrap();
         assert_eq!(test.0, 42);
-        
+
         let back = test.into_value();
         assert_eq!(back.as_raw(), 42 as rb_sys::VALUE);
     }

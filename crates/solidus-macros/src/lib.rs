@@ -818,7 +818,7 @@ fn generate_method_wrapper_dynamic(
         conversion_stmts.push(quote! {
             let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
             let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
-            solidus::pin_on_stack!(#arg_pinned = #arg_converted);
+            solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
         });
 
         // Determine how to pass the argument to the user function
@@ -903,7 +903,7 @@ fn generate_function_wrapper_dynamic(
         conversion_stmts.push(quote! {
             let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
             let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
-            solidus::pin_on_stack!(#arg_pinned = #arg_converted);
+            solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
         });
 
         // Determine how to pass the argument to the user function

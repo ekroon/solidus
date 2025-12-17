@@ -395,7 +395,7 @@ fn test_function_implicit_pinning_direct_call() {
 #[test]
 fn test_method_mixed_pinning_direct_call() {
     // Create a pinned value for the explicit parameter
-    solidus::pin_on_stack!(pinned_arg = TestValue(10));
+    solidus::pin_on_stack!(pinned_arg = solidus::value::PinGuard::new(TestValue(10)));
     let result = method_mixed_pinning(TestValue(1), pinned_arg, TestValue(100));
     assert_eq!(result.unwrap(), 111);
 }

@@ -55,6 +55,27 @@ requiring Ruby for basic development.
 - **Safety**: Document all `unsafe` blocks with `// SAFETY:` comments
 - **Documentation**: All public items must have doc comments
 
+### Pre-Commit Checklist
+
+**CRITICAL**: CI will fail if code is not properly formatted. ALWAYS run `cargo fmt --all` 
+before committing any code changes.
+
+**IMPORTANT**: Always run these commands before committing code to avoid CI failures:
+
+1. **Format code FIRST**: `cargo fmt --all` - Automatically fixes formatting issues
+   - This MUST be run before committing - CI enforces zero formatting deviations
+   - Fixes trailing whitespace, import ordering, line lengths, etc.
+2. **Check formatting**: `cargo fmt --all -- --check` - Verify formatting is correct
+3. **Run clippy**: `cargo clippy --workspace -- -D warnings` - Check for linting issues
+4. **Run tests**: `cargo test --workspace` - Ensure basic tests pass
+5. **Run Ruby tests** (if modifying Ruby integration): `cargo test --workspace --features link-ruby`
+
+The CI pipeline enforces strict formatting and linting standards. Running these commands
+locally before committing will catch issues early and prevent CI failures.
+
+**Remember**: Step 1 (`cargo fmt --all`) is non-negotiable - formatting violations will 
+cause the CI Format job to fail immediately.
+
 ## Crate Structure
 
 - **solidus** (`crates/solidus/`): Main library crate

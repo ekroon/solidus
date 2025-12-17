@@ -3,8 +3,8 @@
 use std::marker::PhantomPinned;
 use std::ops::{Deref, DerefMut};
 
-use super::{BoxValue, ReprValue};
 use super::traits::IntoPinnable;
+use super::{BoxValue, ReprValue};
 
 /// A guard that enforces pinning of newly-created Ruby values.
 ///
@@ -212,7 +212,7 @@ impl<T: ReprValue> AsMut<T> for PinGuard<T> {
 // Implement IntoPinnable for PinGuard to help with type inference in pin_on_stack! macro
 impl<T: ReprValue> IntoPinnable for PinGuard<T> {
     type Target = T;
-    
+
     #[inline]
     unsafe fn into_pinnable(self) -> Self::Target {
         self.value
@@ -228,13 +228,13 @@ mod tests {
     fn test_pin_guard_to_pin_on_stack() {
         // Test the atomic pinning workflow
         use crate::pin_on_stack;
-        
+
         // SAFETY: Qnil is always a valid VALUE
         let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
-        
+
         // The guard is atomically consumed and pinned
         pin_on_stack!(pinned = guard);
-        
+
         // Verify we can access the value
         let value = pinned.get();
         assert!(value.is_nil());
@@ -322,14 +322,16 @@ mod tests {
         // SAFETY: Qnil is always a valid VALUE
         let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
         pin_on_stack!(pinned_value = guard);
-        
+
         // pinned_value is Pin<&StackPinned<Value>>
         let inner = pinned_value.get();
         assert!(inner.is_nil());
 
         // Pattern 2: One-shot - direct expression
-        // SAFETY: Qnil is always a valid VALUE  
-        pin_on_stack!(pinned_direct = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) }));
+        // SAFETY: Qnil is always a valid VALUE
+        pin_on_stack!(
+            pinned_direct = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) })
+        );
         let inner2 = pinned_direct.get();
         assert!(inner2.is_nil());
     }

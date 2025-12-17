@@ -1,17 +1,17 @@
 // Tests that verify the safety guarantees of PinGuard and pin_on_stack!
 // These tests confirm that dangerous patterns no longer compile.
 
-use solidus::value::{PinGuard, Value};
 use solidus::pin_on_stack;
+use solidus::value::{PinGuard, Value};
 
 // Test 1: The safe workflow - atomic pinning via pin_on_stack!
 #[test]
 fn test_atomic_pinning_workflow() {
     let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
-    
+
     // This is the ONLY safe way to pin: atomically consume the guard
     pin_on_stack!(pinned_ref = guard);
-    
+
     // Now pinned_ref is Pin<&StackPinned<Value>>
     let inner = pinned_ref.get();
     assert!(inner.is_nil());
@@ -22,7 +22,7 @@ fn test_atomic_pinning_workflow() {
 fn test_direct_expression_pinning() {
     // We can pin the result of an expression directly
     pin_on_stack!(pinned = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) }));
-    
+
     let inner = pinned.get();
     assert!(inner.is_nil());
 }
@@ -32,14 +32,14 @@ fn test_direct_expression_pinning() {
 #[test]
 fn test_heap_boxing_still_works() {
     let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
-    
+
     // Explicit heap storage with GC registration
     let boxed = guard.into_box();
-    
+
     // Can safely store in collections
     let mut vec = Vec::new();
     vec.push(boxed);
-    
+
     assert_eq!(vec.len(), 1);
 }
 
@@ -48,11 +48,11 @@ fn test_heap_boxing_still_works() {
 fn test_plain_types_work() {
     // Simulating what happens in method! macro with try_convert
     let value = unsafe { Value::from_raw(rb_sys::Qnil.into()) };
-    
+
     // pin_on_stack! requires PinGuard now
     let guard = PinGuard::new(value);
     pin_on_stack!(pinned = guard);
-    
+
     let inner = pinned.get();
     assert!(inner.is_nil());
 }
@@ -94,18 +94,18 @@ fn create_stackpinned() -> StackPinned<Value> {
 #[test]
 fn test_pin_guard_is_not_unpin() {
     let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
-    
+
     // This would fail if uncommented:
     // fn requires_unpin<T: Unpin>(_: T) {}
     // requires_unpin(guard);  // ERROR: PinGuard<Value>: Unpin is not satisfied
-    
+
     // Guard must be consumed via pin_on_stack! or .into_box()
     pin_on_stack!(_pinned = guard);
 }
 
 // Test 6: Verify the #[must_use] warning still triggers
 #[test]
-#[allow(unused_must_use)]  // We're testing that the warning exists
+#[allow(unused_must_use)] // We're testing that the warning exists
 fn test_must_use_warning() {
     // This should generate a warning about unused PinGuard
     PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });

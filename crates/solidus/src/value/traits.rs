@@ -70,7 +70,7 @@ pub trait ReprValue: Clone {
 pub trait IntoPinnable {
     /// The resulting type after unpacking the guard
     type Target: ReprValue;
-    
+
     /// Consume self and return the value to be pinned.
     ///
     /// # Safety
