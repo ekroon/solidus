@@ -1,130 +1,74 @@
 //! Phase 3 Attribute Macros Example
 //!
 //! This example demonstrates the `#[solidus_macros::method]` and `#[solidus_macros::function]`
-//! attribute macros that provide **implicit pinning** for method arguments.
+//! attribute macros that provide **automatic pinning** for method arguments.
 //!
 //! # Key Features Demonstrated
 //!
-//! - **Implicit pinning**: Write simple signatures like `fn foo(arg: RString)` instead of
-//!   `fn foo(arg: Pin<&StackPinned<RString>>)`. The macro handles stack pinning automatically.
-//! - **Explicit pinning**: Backward-compatible with explicit `Pin<&StackPinned<T>>` signatures.
-//! - **Mixed signatures**: Can mix implicit and explicit pinning in the same function.
-//! - **Copy bound enforcement**: Implicit pinning requires `T: Copy` (enforced at compile time).
+//! - **Automatic pinning**: Write signatures with `Pin<&StackPinned<T>>` and the macro's
+//!   generated wrapper handles the stack pinning for you. You never manually pin values.
+//! - **Compile-time safety**: VALUE types are `!Copy` after ADR-007, preventing accidental
+//!   heap storage that would break GC safety.
+//! - **Clean signatures**: Your function receives properly pinned references, ready to use.
 //!
 //! # Comparison with phase3_methods
 //!
-//! The `phase3_methods` example uses the `method!` and `function!` declarative macros,
-//! which require explicit `Pin<&StackPinned<T>>` for all heap-allocated arguments.
+//! Both `phase3_methods` and `phase3_attr_macros` use the same `Pin<&StackPinned<T>>` signatures.
+//! The difference is in how you write the code:
 //!
-//! This example uses the attribute macros which allow simpler signatures via implicit pinning.
+//! - `phase3_methods`: Uses `method!` and `function!` declarative macros
+//! - `phase3_attr_macros`: Uses `#[method]` and `#[function]` attribute macros
+//!
+//! Both provide the same automatic pinning behavior in the generated wrapper code.
 //!
 //! # How Pinning Prevents Unsafe Heap Storage
 //!
-//! When you use explicit `Pin<&StackPinned<T>>` signatures, the Rust compiler prevents
-//! you from moving the pinned value to the heap (e.g., into a `Vec`). This is crucial
-//! for GC safety - Ruby values must stay on the stack where Ruby's GC can find them.
+//! After ADR-007, all VALUE types (RString, RArray, etc.) are `!Copy`. This means you
+//! cannot accidentally move them to the heap, which would break GC safety.
 //!
-//! ## What Works: Reading the Value
+//! ## What the `Pin<&StackPinned<T>>` Signature Does
 //!
-//! You can safely read and copy the inner value from a pinned reference:
+//! When you write a function signature with `Pin<&StackPinned<RString>>`, the macro's
+//! generated wrapper:
+//!
+//! 1. Receives raw VALUE arguments from Ruby
+//! 2. Converts them to typed values (e.g., RString)
+//! 3. Wraps them in StackPinned<T> on the wrapper's stack frame
+//! 4. Pins them and passes Pin<&StackPinned<T>> to your function
+//!
+//! You never manually pin values - the macro does it for you.
+//!
+//! ## Reading Values from Pinned References
+//!
+//! Access the inner value using `.get()`:
 //!
 //! ```ignore
 //! #[solidus_macros::method]
-//! fn safe_read(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
-//!     // This is safe - we copy the VALUE (which is just a pointer-sized integer)
-//!     let value: RString = *arg.get();
-//!     Ok(value)
+//! fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+//!     // Access the inner value with .get()
+//!     let s = arg.get().to_string()?;
+//!     Ok(RString::new(&format!("Got: {}", s)))
 //! }
 //! ```
 //!
-//! ## What the Compiler Prevents: Moving Pinned References to Heap
+//! ## Why This Matters for GC Safety
 //!
-//! The following code would NOT compile because you cannot move a pinned reference
-//! into a `Vec` (which lives on the heap):
+//! Ruby's garbage collector scans the C stack to find VALUE references. By enforcing
+//! `!Copy` on VALUE types and requiring `Pin<&StackPinned<T>>` signatures, Solidus
+//! ensures at compile time that:
 //!
-//! ```compile_fail
-//! use solidus::prelude::*;
-//! use std::pin::Pin;
+//! 1. VALUES cannot be moved to the heap (they're `!Copy`)
+//! 2. The macro wrapper keeps VALUES pinned on its stack frame
+//! 3. Ruby's GC can always find these VALUES during collection
 //!
-//! // This function tries to store pinned references in a Vec - this won't compile!
-//! fn try_store_pinned_refs(args: Vec<Pin<&StackPinned<RString>>>) {
-//!     // ERROR: Cannot collect pinned references into a Vec
-//!     // The Pin guarantees the values stay on the stack
-//! }
-//!
-//! #[solidus_macros::method]
-//! fn bad_collect(
-//!     rb_self: RString,
-//!     arg: Pin<&StackPinned<RString>>,
-//! ) -> Result<PinGuard<RString>, Error> {
-//!     // This won't compile - can't store the pinned reference in a Vec
-//!     let mut heap_vec: Vec<Pin<&StackPinned<RString>>> = Vec::new();
-//!     heap_vec.push(arg);  // ERROR: cannot move out of `arg`
-//!     Ok(rb_self)
-//! }
-//! ```
-//!
-//! ## Why This Matters
-//!
-//! Ruby's garbage collector scans the C stack to find VALUE references. If a VALUE
-//! is moved to the Rust heap (e.g., in a `Vec<RString>`), Ruby's GC won't find it
-//! and may collect the underlying Ruby object while Rust still holds a reference.
-//!
-//! The `StackPinned<T>` wrapper combined with `Pin` provides compile-time guarantees
-//! that VALUES stay on the stack where Ruby's GC can protect them.
-//!
-//! ## Implicit Pinning: The Best of Both Worlds
-//!
-//! With implicit pinning, you write simple signatures but get the same safety:
-//!
-//! ```ignore
-//! #[solidus_macros::function]
-//! fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
-//!     // `name` was automatically pinned on the stack by the macro wrapper.
-//!     // The user function receives a Copy of the VALUE, which is safe because:
-//!     // 1. The original VALUE is pinned on the wrapper's stack frame
-//!     // 2. RString is Copy (it's just a VALUE, a pointer-sized integer)
-//!     // 3. Ruby's GC will find the pinned VALUE during any GC pause
-//!     Ok(RString::new(&format!("Hello, {}!", name.to_string()?)))
-//! }
-//! ```
-//!
-//! ## Implicit Pinning Requires Copy
-//!
-//! The implicit pinning mechanism requires that argument types implement `Copy`.
-//! This is enforced at compile time. If you try to use a non-Copy type with
-//! implicit pinning, you'll get a compile error:
-//!
-//! ```compile_fail,E0277
-//! use solidus::prelude::*;
-//!
-//! // A non-Copy wrapper type
-//! struct NonCopyWrapper(RString);
-//!
-//! impl solidus::convert::TryConvert for NonCopyWrapper {
-//!     fn try_convert(val: Value) -> Result<Self, Error> {
-//!         Ok(NonCopyWrapper(RString::try_convert(val)?))
-//!     }
-//! }
-//!
-//! // This won't compile because NonCopyWrapper doesn't implement Copy!
-//! // The macro generates code that requires T: Copy for implicit pinning.
-//! #[solidus_macros::function]
-//! fn use_non_copy(arg: NonCopyWrapper) -> Result<i64, Error> {
-//!     //~^ ERROR the trait bound `NonCopyWrapper: Copy` is not satisfied
-//!     Ok(42)
-//! }
-//! ```
-//!
-//! This is intentional: the macro copies the value out of the pinned location,
-//! which is only safe for `Copy` types. For non-Copy types, use explicit
-//! `Pin<&StackPinned<T>>` and access the value by reference via `.get()`.
+//! This prevents the undefined behavior that Magnus allows, where you can accidentally
+//! store VALUEs in heap collections like `Vec<RString>` without GC protection.
 
 use solidus::prelude::*;
 use std::pin::Pin;
 
 // ============================================================================
-// Implicit Pinning Examples - Simple, ergonomic signatures
+// Function Examples - All use Pin<&StackPinned<T>> for heap arguments
 // ============================================================================
 
 /// Global function with no arguments.
@@ -133,15 +77,15 @@ fn get_greeting() -> Result<PinGuard<RString>, Error> {
     Ok(RString::new("Hello from attribute macros!"))
 }
 
-/// Global function with implicit pinning.
-/// Notice: `name` is just `RString`, not `Pin<&StackPinned<RString>>`.
+/// Global function with automatic pinning via macro wrapper.
+/// The macro handles converting Ruby VALUEs to RStrings and pinning them.
 #[solidus_macros::function]
 fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let name_str = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name_str)))
 }
 
-/// Global function with two implicitly pinned arguments.
+/// Global function with two arguments, both automatically pinned.
 #[solidus_macros::function]
 fn join_strings(first: Pin<&StackPinned<RString>>, second: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let a = first.get().to_string()?;
@@ -157,7 +101,7 @@ fn length(rb_self: RString) -> Result<i64, Error> {
     Ok(s.len() as i64)
 }
 
-/// Instance method with implicit pinning for the argument.
+/// Instance method with automatic pinning for the argument.
 #[solidus_macros::method]
 fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let self_str = rb_self.to_string()?;
@@ -165,7 +109,7 @@ fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuar
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
 }
 
-/// Instance method with two implicitly pinned arguments.
+/// Instance method with two automatically pinned arguments.
 #[solidus_macros::method]
 fn surround(rb_self: RString, prefix: Pin<&StackPinned<RString>>, suffix: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let p = prefix.get().to_string()?;
@@ -175,11 +119,10 @@ fn surround(rb_self: RString, prefix: Pin<&StackPinned<RString>>, suffix: Pin<&S
 }
 
 // ============================================================================
-// Explicit Pinning Examples - For backward compatibility
+// All Signatures Use Pin<&StackPinned<T>> - The Macro Handles Pinning
 // ============================================================================
 
-/// Instance method using explicit `Pin<&StackPinned<T>>` signature.
-/// This is the traditional style, still fully supported.
+/// Instance method - same Pin<&StackPinned<T>> signature style.
 #[solidus_macros::method]
 fn concat_explicit(
     rb_self: RString,
@@ -190,7 +133,7 @@ fn concat_explicit(
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
 }
 
-/// Global function with explicit pinning.
+/// Global function - same Pin<&StackPinned<T>> signature style.
 #[solidus_macros::function]
 fn uppercase_explicit(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let input = s.get().to_string()?;
@@ -198,10 +141,10 @@ fn uppercase_explicit(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>
 }
 
 // ============================================================================
-// Mixed Pinning Examples - Combine implicit and explicit in one function
+// Mixed Argument Types - Pinned and Immediate Values
 // ============================================================================
 
-/// Function with mixed signatures: first arg explicit, second arg implicit.
+/// Function demonstrating multiple pinned arguments.
 #[solidus_macros::function]
 fn format_mixed(
     explicit_arg: Pin<&StackPinned<RString>>,
@@ -212,7 +155,7 @@ fn format_mixed(
     Ok(RString::new(&format!("[{}] -> [{}]", a, b)))
 }
 
-/// Method with mixed signatures.
+/// Method demonstrating pinned argument with self.
 #[solidus_macros::method]
 fn combine_mixed(
     rb_self: RString,
@@ -227,7 +170,7 @@ fn combine_mixed(
 // Module Functions - Using attribute macros on module-level functions
 // ============================================================================
 
-/// Module function with implicit pinning.
+/// Module function with automatic pinning.
 #[solidus_macros::function]
 fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let input = s.get().to_string()?;

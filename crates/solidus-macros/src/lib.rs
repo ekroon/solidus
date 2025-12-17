@@ -10,35 +10,41 @@
 //! These macros are re-exported by the main `solidus` crate and should not be
 //! used directly.
 //!
-//! # Implicit Pinning
+//! # Automatic Pinning and Parameter Types
 //!
-//! The `#[method]` and `#[function]` macros support **implicit pinning** for method
-//! arguments. This allows you to write simple function signatures without manually
-//! wrapping types in `Pin<&StackPinned<T>>`:
+//! The `#[method]` and `#[function]` macros automatically pin method arguments on the
+//! stack for GC safety. However, you must use the correct parameter type based on what
+//! you're passing:
+//!
+//! ## Ruby VALUE Types (RString, RArray, etc.)
+//!
+//! For Ruby VALUE types, you **must** use `Pin<&StackPinned<T>>` in your function
+//! signature to ensure type safety:
 //!
 //! ```ignore
-//! // Simple signature with implicit pinning (recommended)
 //! #[solidus::method]
-//! fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
-//!     // Use `other` directly
-//! }
-//!
-//! // Explicit pinning (still supported)
-//! #[solidus::method]
-//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
-//!     // Must use `other.get()` to access the inner value
+//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+//!     // Access the inner value with .get()
+//!     let other_str = other.get().to_string()?;
+//!     // ...
 //! }
 //! ```
 //!
-//! ## Copy Requirement for Implicit Pinning
+//! All Ruby VALUE types are `!Copy` to prevent unsafe heap storage. The
+//! `Pin<&StackPinned<T>>` signature ensures values remain pinned on the stack.
 //!
-//! When using implicit pinning (simple type signatures), the argument types must
-//! implement `Copy`. This is enforced at compile time. All solidus Ruby value types
-//! (`RString`, `RArray`, `Value`, etc.) implement `Copy` since they are just wrappers
-//! around a pointer-sized `VALUE`.
+//! ## Rust Primitives (i64, bool, String, etc.)
 //!
-//! If you need to work with non-Copy types, use the explicit `Pin<&StackPinned<T>>`
-//! form and access the value by reference via `.get()`.
+//! For Rust primitive types that implement `TryConvert`, use the type directly:
+//!
+//! ```ignore
+//! #[solidus::method]
+//! fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
+//!     // Use `count` directly as i64
+//! }
+//! ```
+//!
+//! The macro automatically converts Ruby VALUEs to Rust primitives when possible.
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -54,7 +60,6 @@ use syn::{
 type MacroResult<T> = Result<T, syn::Error>;
 
 /// Information about a parsed parameter.
-#[derive(Debug)]
 struct ParamInfo {
     /// Whether the type is already `Pin<&StackPinned<T>>`
     is_explicit_pinned: bool,
@@ -460,31 +465,43 @@ pub fn wrap(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The first parameter must be `self` (the Ruby receiver), and subsequent parameters
 /// are the method arguments.
 ///
-/// # Implicit Pinning
+/// # Automatic Pinning and Parameter Types
 ///
-/// The macro supports **implicit pinning** for method arguments. You can write simple
-/// signatures with direct types, and the macro will automatically pin them on the stack
-/// for GC safety:
+/// The macro **automatically pins all arguments on the stack** for GC safety. This
+/// happens in the generated wrapper code, not in your function body.
+///
+/// You must choose the correct parameter type based on what you're working with:
+///
+/// ## Ruby VALUE Types (RString, RArray, etc.)
+///
+/// For Ruby VALUE types, use `Pin<&StackPinned<T>>` in your function signature:
 ///
 /// ```ignore
-/// // Simple (implicit pinning) - recommended!
 /// #[solidus::method]
-/// fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
-///     // Use `other` directly as RString
-/// }
-///
-/// // Explicit pinning - still supported for backwards compatibility
-/// #[solidus::method]
-/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
-///     // Must use `other.get()` to access the inner value
+/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+///     let self_str = rb_self.to_string()?;
+///     let other_str = other.get().to_string()?;  // Access with .get()
+///     RString::new(&format!("{}{}", self_str, other_str))
 /// }
 /// ```
 ///
-/// ## Copy Requirement
+/// All Ruby VALUE types are `!Copy` to prevent unsafe heap storage. The
+/// `Pin<&StackPinned<T>>` signature ensures the value remains pinned on the stack.
 ///
-/// When using implicit pinning, argument types must implement `Copy`. This is enforced
-/// at compile time. All solidus Ruby value types implement `Copy`. For non-Copy types,
-/// use explicit `Pin<&StackPinned<T>>` signatures.
+/// ## Rust Primitives (i64, bool, String, etc.)
+///
+/// For Rust primitive types, use the type directly:
+///
+/// ```ignore
+/// #[solidus::method]
+/// fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
+///     let s = rb_self.to_string()?;
+///     RString::new(&s.repeat(count as usize))
+/// }
+/// ```
+///
+/// The macro automatically converts Ruby VALUEs to Rust primitives when the type
+/// implements `TryConvert`.
 ///
 /// # Generated Code
 ///
@@ -492,16 +509,16 @@ pub fn wrap(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn greet(rb_self: RString) -> Result<RString, Error> {
-///     Ok(rb_self)
+/// fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
+///     Ok(rb_self.into())
 /// }
 /// ```
 ///
 /// The macro generates:
 ///
 /// ```ignore
-/// fn greet(rb_self: RString) -> Result<RString, Error> {
-///     Ok(rb_self)
+/// fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
+///     Ok(rb_self.into())
 /// }
 ///
 /// #[doc(hidden)]
@@ -522,12 +539,19 @@ pub fn wrap(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```ignore
 /// use solidus::prelude::*;
 ///
-/// // Implicit pinning (simple, recommended)
+/// // Ruby VALUE types use Pin<&StackPinned<T>>
 /// #[solidus::method]
-/// fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
+/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 ///     let self_str = rb_self.to_string()?;
-///     let other_str = other.to_string()?;
+///     let other_str = other.get().to_string()?;
 ///     RString::new(&format!("{}{}", self_str, other_str))
+/// }
+///
+/// // Rust primitives use the type directly
+/// #[solidus::method]
+/// fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
+///     let s = rb_self.to_string()?;
+///     RString::new(&s.repeat(count as usize))
 /// }
 ///
 /// // Register with Ruby using the generated module:
@@ -562,30 +586,40 @@ pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// All parameters are method arguments.
 ///
-/// # Implicit Pinning
+/// # Automatic Pinning and Parameter Types
 ///
-/// Like `#[solidus::method]`, this macro supports **implicit pinning**. You can write
-/// simple signatures with direct types:
+/// Like `#[solidus::method]`, this macro **automatically pins all arguments on the stack**
+/// for GC safety. This happens in the generated wrapper code, not in your function body.
+///
+/// You must choose the correct parameter type based on what you're working with:
+///
+/// ## Ruby VALUE Types (RString, RArray, etc.)
+///
+/// For Ruby VALUE types, use `Pin<&StackPinned<T>>` in your function signature:
 ///
 /// ```ignore
-/// // Simple (implicit pinning) - recommended!
 /// #[solidus::function]
-/// fn greet(name: RString) -> Result<RString, Error> {
-///     RString::new(&format!("Hello, {}!", name.to_string()?))
-/// }
-///
-/// // Explicit pinning - still supported
-/// #[solidus::function]
-/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 ///     RString::new(&format!("Hello, {}!", name.get().to_string()?))
 /// }
 /// ```
 ///
-/// ## Copy Requirement
+/// All Ruby VALUE types are `!Copy` to prevent unsafe heap storage. The
+/// `Pin<&StackPinned<T>>` signature ensures the value remains pinned on the stack.
 ///
-/// When using implicit pinning, argument types must implement `Copy`. This is enforced
-/// at compile time. All solidus Ruby value types implement `Copy`. For non-Copy types,
-/// use explicit `Pin<&StackPinned<T>>` signatures.
+/// ## Rust Primitives (i64, bool, String, etc.)
+///
+/// For Rust primitive types, use the type directly:
+///
+/// ```ignore
+/// #[solidus::function]
+/// fn add(a: i64, b: i64) -> Result<i64, Error> {
+///     Ok(a + b)
+/// }
+/// ```
+///
+/// The macro automatically converts Ruby VALUEs to Rust primitives when the type
+/// implements `TryConvert`.
 ///
 /// # Generated Code
 ///
@@ -623,11 +657,17 @@ pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```ignore
 /// use solidus::prelude::*;
 ///
-/// // Implicit pinning (simple, recommended)
+/// // Ruby VALUE types use Pin<&StackPinned<T>>
 /// #[solidus::function]
-/// fn greet(name: RString) -> Result<RString, Error> {
-///     let name_str = name.to_string()?;
+/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+///     let name_str = name.get().to_string()?;
 ///     RString::new(&format!("Hello, {}!", name_str))
+/// }
+///
+/// // Rust primitives use the type directly
+/// #[solidus::function]
+/// fn add(a: i64, b: i64) -> Result<i64, Error> {
+///     Ok(a + b)
 /// }
 ///
 /// // Register with Ruby using the generated module:
@@ -826,9 +866,10 @@ fn generate_method_wrapper_dynamic(
             // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
             call_args.push(quote! { #arg_pinned });
         } else {
-            // User wants T directly, extract from pin and copy.
-            // The __assert_copy helper enforces that T: Copy at compile time.
-            call_args.push(quote! { { fn __assert_copy<T: Copy>(v: &T) -> T { *v } __assert_copy(#arg_pinned.get()) } });
+            // User wants T directly - this only works for Rust primitives that implement TryConvert.
+            // For Ruby VALUE types, users MUST use Pin<&StackPinned<T>>.
+            // We pass the pinned value and let the compiler enforce the right signature.
+            call_args.push(quote! { #arg_pinned });
         }
     }
 
@@ -911,9 +952,10 @@ fn generate_function_wrapper_dynamic(
             // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
             call_args.push(quote! { #arg_pinned });
         } else {
-            // User wants T directly, extract from pin and copy.
-            // The __assert_copy helper enforces that T: Copy at compile time.
-            call_args.push(quote! { { fn __assert_copy<T: Copy>(v: &T) -> T { *v } __assert_copy(#arg_pinned.get()) } });
+            // User wants T directly - this only works for Rust primitives that implement TryConvert.
+            // For Ruby VALUE types, users MUST use Pin<&StackPinned<T>>.
+            // We pass the pinned value and let the compiler enforce the right signature.
+            call_args.push(quote! { #arg_pinned });
         }
     }
 

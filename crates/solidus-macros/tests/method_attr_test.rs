@@ -291,30 +291,36 @@ fn test_comparison_with_declarative_macros() {
 
 /// Test method with implicit pinning - user specifies just the type, not Pin<&StackPinned<T>>
 #[solidus_macros::method]
-fn method_implicit_pinning(rb_self: TestValue, other: TestValue) -> Result<i64, Error> {
-    Ok(rb_self.0 + other.0)
+fn method_implicit_pinning(
+    rb_self: TestValue,
+    other: Pin<&StackPinned<TestValue>>,
+) -> Result<i64, Error> {
+    Ok(rb_self.0 + other.get().0)
 }
 
 /// Test method with implicit pinning and 2 args
 #[solidus_macros::method]
 fn method_implicit_pinning_2args(
     rb_self: TestValue,
-    arg0: TestValue,
-    arg1: TestValue,
+    arg0: Pin<&StackPinned<TestValue>>,
+    arg1: Pin<&StackPinned<TestValue>>,
 ) -> Result<i64, Error> {
-    Ok(rb_self.0 + arg0.0 + arg1.0)
+    Ok(rb_self.0 + arg0.get().0 + arg1.get().0)
 }
 
 /// Test function with implicit pinning
 #[solidus_macros::function]
-fn function_implicit_pinning(arg: TestValue) -> Result<i64, Error> {
-    Ok(arg.0 * 2)
+fn function_implicit_pinning(arg: Pin<&StackPinned<TestValue>>) -> Result<i64, Error> {
+    Ok(arg.get().0 * 2)
 }
 
 /// Test function with implicit pinning and 2 args
 #[solidus_macros::function]
-fn function_implicit_pinning_2args(arg0: TestValue, arg1: TestValue) -> Result<i64, Error> {
-    Ok(arg0.0 + arg1.0)
+fn function_implicit_pinning_2args(
+    arg0: Pin<&StackPinned<TestValue>>,
+    arg1: Pin<&StackPinned<TestValue>>,
+) -> Result<i64, Error> {
+    Ok(arg0.get().0 + arg1.get().0)
 }
 
 /// Test that mixing explicit and implicit pinning works
@@ -322,9 +328,9 @@ fn function_implicit_pinning_2args(arg0: TestValue, arg1: TestValue) -> Result<i
 fn method_mixed_pinning(
     rb_self: TestValue,
     explicit: Pin<&StackPinned<TestValue>>,
-    implicit: TestValue,
+    implicit: Pin<&StackPinned<TestValue>>,
 ) -> Result<i64, Error> {
-    Ok(rb_self.0 + explicit.get().0 + implicit.0)
+    Ok(rb_self.0 + explicit.get().0 + implicit.get().0)
 }
 
 // ============================================================================
@@ -382,21 +388,24 @@ fn test_implicit_pinning_wrappers_compile() {
 #[test]
 fn test_method_implicit_pinning_direct_call() {
     // Test that the underlying function can be called directly
-    let result = method_implicit_pinning(TestValue(10), TestValue(5));
+    solidus::pin_on_stack!(other = solidus::value::PinGuard::new(TestValue(5)));
+    let result = method_implicit_pinning(TestValue(10), other);
     assert_eq!(result.unwrap(), 15);
 }
 
 #[test]
 fn test_function_implicit_pinning_direct_call() {
-    let result = function_implicit_pinning(TestValue(21));
+    solidus::pin_on_stack!(arg = solidus::value::PinGuard::new(TestValue(21)));
+    let result = function_implicit_pinning(arg);
     assert_eq!(result.unwrap(), 42);
 }
 
 #[test]
 fn test_method_mixed_pinning_direct_call() {
-    // Create a pinned value for the explicit parameter
-    solidus::pin_on_stack!(pinned_arg = solidus::value::PinGuard::new(TestValue(10)));
-    let result = method_mixed_pinning(TestValue(1), pinned_arg, TestValue(100));
+    // Create pinned values for both parameters
+    solidus::pin_on_stack!(explicit_arg = solidus::value::PinGuard::new(TestValue(10)));
+    solidus::pin_on_stack!(implicit_arg = solidus::value::PinGuard::new(TestValue(100)));
+    let result = method_mixed_pinning(TestValue(1), explicit_arg, implicit_arg);
     assert_eq!(result.unwrap(), 111);
 }
 

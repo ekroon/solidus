@@ -1,39 +1,45 @@
 # Phase 3 Attribute Macros Example
 
 This example demonstrates the `#[solidus_macros::method]` and `#[solidus_macros::function]`
-attribute macros that provide **implicit pinning** for method arguments.
+attribute macros that provide **automatic pinning** for method arguments.
 
-## Key Feature: Implicit Pinning
+## Key Feature: Automatic Pinning
 
-The main innovation of these attribute macros is that you can write simple function
-signatures without manually wrapping types in `Pin<&StackPinned<T>>`:
+The attribute macros generate wrapper code that automatically handles stack pinning of
+Ruby VALUEs. You write function signatures with `Pin<&StackPinned<T>>`, and the macro's
+wrapper does the pinning work for you:
 
 ```rust
-// Simple signature with implicit pinning (recommended)
+// Your function signature uses Pin<&StackPinned<T>>
 #[solidus_macros::method]
-fn concat(rb_self: RString, other: RString) -> Result<RString, Error> {
-    let self_str = rb_self.to_string()?;
-    let other_str = other.to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
-}
-
-// Explicit pinning (still supported for backward compatibility)
-#[solidus_macros::method]
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
 }
 ```
 
+The macro generates a wrapper that:
+1. Receives raw VALUE arguments from Ruby
+2. Converts them to typed values (e.g., RString)
+3. Wraps them in StackPinned<T> on the wrapper's stack
+4. Pins them and passes Pin<&StackPinned<T>> to your function
+
+You never manually pin values - the macro handles it.
+
 ## Comparison with phase3_methods
+
+Both `phase3_methods` and `phase3_attr_macros` use the same `Pin<&StackPinned<T>>`
+signatures for heap-allocated Ruby values. The difference is in syntax:
 
 | Feature | `phase3_methods` | `phase3_attr_macros` |
 |---------|------------------|----------------------|
 | Macro style | `method!(fn_name, arity)` | `#[solidus_macros::method]` |
-| Argument signature | Explicit `Pin<&StackPinned<T>>` | Implicit `T` (simple) |
+| Argument signature | `Pin<&StackPinned<T>>` | `Pin<&StackPinned<T>>` |
 | Generated module | N/A | `__solidus_method_<name>` |
 | ARITY constant | Passed separately | `__solidus_method_<name>::ARITY` |
+
+Both provide automatic pinning via the generated wrapper code.
 
 ## Building
 
@@ -78,6 +84,12 @@ ALL TESTS PASSED!
 
 ## How It Works
 
+### VALUE Types are !Copy (ADR-007)
+
+After ADR-007, all Ruby VALUE types (RString, RArray, etc.) are `!Copy`. This prevents
+accidentally moving them to the heap, which would break GC safety since Ruby's GC only
+scans the C stack for VALUEs.
+
 ### Generated Code Structure
 
 For each function annotated with `#[solidus_macros::method]` or `#[solidus_macros::function]`,
@@ -85,7 +97,7 @@ the macro generates a hidden module:
 
 ```rust
 // For: #[solidus_macros::function]
-//      fn greet(name: RString) -> Result<RString, Error>
+//      fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
 
 #[doc(hidden)]
 pub mod __solidus_function_greet {
@@ -94,8 +106,9 @@ pub mod __solidus_function_greet {
     pub fn wrapper() -> unsafe extern "C" fn() -> solidus::rb_sys::VALUE {
         // Generated wrapper that handles:
         // - Panic catching
-        // - Type conversion
-        // - Stack pinning
+        // - Type conversion from raw VALUEs
+        // - Stack pinning (wraps values in StackPinned<T>)
+        // - Calling your function with Pin<&StackPinned<T>>
         // - Error propagation
     }
 }
@@ -112,20 +125,12 @@ ruby.define_global_function(
 )?;
 ```
 
-### Copy Requirement
-
-When using implicit pinning (simple type signatures), the argument types must implement
-`Copy`. This is enforced at compile time. All solidus Ruby value types (`RString`,
-`RArray`, `Value`, etc.) implement `Copy` since they are just wrappers around a
-pointer-sized `VALUE`.
-
 ## Features Demonstrated
 
-1. **Global functions** with implicit pinning (arities 0-2)
-2. **Instance methods** with implicit pinning (arities 0-2)
-3. **Module functions** with implicit pinning
-4. **Explicit pinning** for backward compatibility
-5. **Mixed signatures** combining implicit and explicit pinning
+1. **Global functions** with automatic pinning (arities 0-2)
+2. **Instance methods** with automatic pinning (arities 0-2)
+3. **Module functions** with automatic pinning
+4. **Mixed argument types** (pinned heap values and immediate values)
 
 ## Supported Arities
 
