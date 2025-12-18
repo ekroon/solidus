@@ -63,6 +63,8 @@ type MacroResult<T> = Result<T, syn::Error>;
 struct ParamInfo {
     /// Whether the type is already `Pin<&StackPinned<T>>`
     is_explicit_pinned: bool,
+    /// Whether this type needs pinning (false for Rust primitives, true for Ruby VALUE types)
+    needs_pinning: bool,
     /// The inner type (T if `Pin<&StackPinned<T>>`, or the original type)
     inner_type: Type,
 }
@@ -121,6 +123,37 @@ fn extract_pinned_inner_type(ty: &Type) -> Option<Type> {
     Some(inner_type.clone())
 }
 
+/// Check if a type is a Rust primitive type that doesn't need pinning.
+///
+/// These types create new Rust data via `TryConvert` rather than wrapping a Ruby VALUE,
+/// so they don't need GC protection through pinning.
+fn is_rust_primitive_type(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+
+    let Some(ident) = type_path.path.get_ident() else {
+        return false;
+    };
+
+    matches!(
+        ident.to_string().as_str(),
+        "i8" | "i16"
+            | "i32"
+            | "i64"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "usize"
+            | "f32"
+            | "f64"
+            | "bool"
+            | "String"
+    )
+}
+
 /// Parse a function parameter and extract its name and type information.
 fn parse_param(param: &FnArg) -> MacroResult<ParamInfo> {
     let FnArg::Typed(pat_type) = param else {
@@ -144,8 +177,19 @@ fn parse_param(param: &FnArg) -> MacroResult<ParamInfo> {
         (false, ty.clone())
     };
 
+    // Determine if this type needs pinning:
+    // - Explicit Pin<&StackPinned<T>> always needs pinning (user requested it)
+    // - Rust primitives (i64, f64, bool, String, etc.) don't need pinning
+    // - Everything else (Ruby VALUE types) needs pinning
+    let needs_pinning = if is_explicit_pinned {
+        true // User explicitly requested pinning
+    } else {
+        !is_rust_primitive_type(&inner_type) // Ruby types need pinning
+    };
+
     Ok(ParamInfo {
         is_explicit_pinned,
+        needs_pinning,
         inner_type,
     })
 }
@@ -967,40 +1011,63 @@ fn generate_method_wrapper_dynamic(
     let mut conversion_stmts = Vec::new();
     let mut call_args = Vec::new();
 
-    // Self conversion
-    conversion_stmts.push(quote! {
-        let self_value = unsafe { solidus::Value::from_raw(rb_self) };
-        let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
-    });
-    call_args.push(quote! { self_converted });
+    // Self conversion - check if it needs pinning
+    if self_param.needs_pinning {
+        // Ruby VALUE type - needs pinning for GC safety
+        conversion_stmts.push(quote! {
+            let self_value = unsafe { solidus::Value::from_raw(rb_self) };
+            let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
+            solidus::pin_on_stack!(self_pinned = solidus::value::PinGuard::new(self_converted));
+        });
+        // Pass as .get().clone() to get the inner type back
+        call_args.push(quote! { self_pinned.get().clone() });
+    } else {
+        // Rust primitive - direct conversion, no pinning
+        conversion_stmts.push(quote! {
+            let self_value = unsafe { solidus::Value::from_raw(rb_self) };
+            let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
+        });
+        call_args.push(quote! { self_converted });
+    }
 
-    // Argument conversions with pinning
+    // Argument conversions - conditionally pin based on type
     for (i, param) in params.iter().skip(1).enumerate() {
         let arg_value = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
-        let arg_converted = syn::Ident::new(
-            &format!("arg{}_converted", i),
-            proc_macro2::Span::call_site(),
-        );
-        let arg_pinned =
-            syn::Ident::new(&format!("arg{}_pinned", i), proc_macro2::Span::call_site());
         let inner_type = &param.inner_type;
 
-        // Always convert and pin (the pinning is for GC safety)
-        conversion_stmts.push(quote! {
-            let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
-            let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
-            solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
-        });
+        if param.needs_pinning {
+            // Ruby VALUE type - needs pinning for GC safety
+            let arg_converted = syn::Ident::new(
+                &format!("arg{}_converted", i),
+                proc_macro2::Span::call_site(),
+            );
+            let arg_pinned =
+                syn::Ident::new(&format!("arg{}_pinned", i), proc_macro2::Span::call_site());
 
-        // Determine how to pass the argument to the user function
-        if param.is_explicit_pinned {
-            // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
-            call_args.push(quote! { #arg_pinned });
+            conversion_stmts.push(quote! {
+                let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
+                let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
+                solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
+            });
+
+            // Determine how to pass the argument to the user function
+            if param.is_explicit_pinned {
+                // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
+                call_args.push(quote! { #arg_pinned });
+            } else {
+                // User wants T directly - pass .get().clone()
+                call_args.push(quote! { #arg_pinned.get().clone() });
+            }
         } else {
-            // User wants T directly - this only works for Rust primitives that implement TryConvert.
-            // For Ruby VALUE types, users MUST use Pin<&StackPinned<T>>.
-            // We pass the pinned value and let the compiler enforce the right signature.
-            call_args.push(quote! { #arg_pinned });
+            // Rust primitive - direct conversion, no pinning needed
+            let arg_direct =
+                syn::Ident::new(&format!("arg{}_direct", i), proc_macro2::Span::call_site());
+
+            conversion_stmts.push(quote! {
+                let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
+                let #arg_direct: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
+            });
+            call_args.push(quote! { #arg_direct });
         }
     }
 
@@ -1060,33 +1127,44 @@ fn generate_function_wrapper_dynamic(
     let mut conversion_stmts = Vec::new();
     let mut call_args = Vec::new();
 
-    // Argument conversions with pinning
+    // Argument conversions - conditionally pin based on type
     for (i, param) in params.iter().enumerate() {
         let arg_value = syn::Ident::new(&format!("arg{}", i), proc_macro2::Span::call_site());
-        let arg_converted = syn::Ident::new(
-            &format!("arg{}_converted", i),
-            proc_macro2::Span::call_site(),
-        );
-        let arg_pinned =
-            syn::Ident::new(&format!("arg{}_pinned", i), proc_macro2::Span::call_site());
         let inner_type = &param.inner_type;
 
-        // Always convert and pin (the pinning is for GC safety)
-        conversion_stmts.push(quote! {
-            let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
-            let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
-            solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
-        });
+        if param.needs_pinning {
+            // Ruby VALUE type - needs pinning for GC safety
+            let arg_converted = syn::Ident::new(
+                &format!("arg{}_converted", i),
+                proc_macro2::Span::call_site(),
+            );
+            let arg_pinned =
+                syn::Ident::new(&format!("arg{}_pinned", i), proc_macro2::Span::call_site());
 
-        // Determine how to pass the argument to the user function
-        if param.is_explicit_pinned {
-            // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
-            call_args.push(quote! { #arg_pinned });
+            conversion_stmts.push(quote! {
+                let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
+                let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
+                solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
+            });
+
+            // Determine how to pass the argument to the user function
+            if param.is_explicit_pinned {
+                // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
+                call_args.push(quote! { #arg_pinned });
+            } else {
+                // User wants T directly - pass .get().clone()
+                call_args.push(quote! { #arg_pinned.get().clone() });
+            }
         } else {
-            // User wants T directly - this only works for Rust primitives that implement TryConvert.
-            // For Ruby VALUE types, users MUST use Pin<&StackPinned<T>>.
-            // We pass the pinned value and let the compiler enforce the right signature.
-            call_args.push(quote! { #arg_pinned });
+            // Rust primitive - direct conversion, no pinning needed
+            let arg_direct =
+                syn::Ident::new(&format!("arg{}_direct", i), proc_macro2::Span::call_site());
+
+            conversion_stmts.push(quote! {
+                let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
+                let #arg_direct: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
+            });
+            call_args.push(quote! { #arg_direct });
         }
     }
 
