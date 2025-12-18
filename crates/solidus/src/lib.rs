@@ -107,6 +107,7 @@ pub mod error;
 pub mod gc;
 pub mod method;
 pub mod ruby;
+pub mod typed_data;
 pub mod types;
 pub mod value;
 
@@ -135,6 +136,7 @@ pub mod prelude {
     pub use crate::init;
     pub use crate::pin_on_stack;
     pub use crate::ruby::Ruby;
+    pub use crate::typed_data::{DataTypeFunctions, TypedData, get, get_mut, wrap};
     pub use crate::types::{
         Encoding, Fixnum, Float, Integer, Module, Qfalse, Qnil, Qtrue, RArray, RBignum, RClass,
         RFloat, RHash, RModule, RString, Symbol,
