@@ -11,7 +11,7 @@ Update this file when a phase is completed to avoid requiring full analysis.
 | 1 | [Foundation](docs/plan/phase-1-foundation.md) | :white_check_mark: Complete | 2025-12 |
 | 2 | [Types](docs/plan/phase-2-types.md) | :white_check_mark: Complete | 2025-12-16 |
 | 3 | [Methods](docs/plan/phase-3-methods.md) | :white_check_mark: Complete | 2025-12-16 |
-| 4 | [TypedData](docs/plan/phase-4-typed-data.md) | :hourglass: Pending | |
+| 4 | [TypedData](docs/plan/phase-4-typed-data.md) | :white_check_mark: Complete | 2025-12-18 |
 | 5 | [Polish](docs/plan/phase-5-polish.md) | :hourglass: Pending | |
 | 6 | [Safety Validation](docs/plan/phase-6-safety-validation.md) | :hourglass: Pending | |
 
@@ -75,6 +75,26 @@ All core acceptance criteria met:
 - **Methods use `&self` instead of `self`**: Prevents moves of `!Copy` types
 - Comprehensive test coverage (192+ tests pass with Ruby)
 - Complete phase3_methods example demonstrating all features
+
+Phase 4 completed with full TypedData support:
+- `TypedData` trait for marking types that can be wrapped
+- `DataType` and `DataTypeBuilder` for GC integration
+- `wrap()`, `get()`, and `get_mut()` functions for wrapping/unwrapping
+- `DataTypeFunctions` trait for advanced GC callbacks (mark, compact, size)
+- `Marker` and `Compactor` types for GC callback helpers
+- `#[solidus::wrap]` attribute macro for automatic TypedData implementation
+- Comprehensive test coverage (6 tests for typed_data module, plus phase4_typed_data example)
+- All public items have doc comments
+- Full integration with the pinned-from-creation safety model
+
+All acceptance criteria met:
+- Rust types can be wrapped as Ruby objects with proper GC integration
+- TypedData trait provides simple marker interface
+- DataTypeBuilder allows configuration of GC behavior
+- Advanced GC callbacks (mark, compact, size) supported via DataTypeFunctions
+- `#[solidus::wrap]` macro generates boilerplate automatically
+- Comprehensive test coverage and documentation
+- Complete phase4_typed_data example demonstrating all features
 
 ## Design Change: Pinned-From-Creation (ADR-007) - ✅ COMPLETE
 

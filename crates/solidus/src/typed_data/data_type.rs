@@ -290,3 +290,44 @@ const RUBY_TYPED_FREE_IMMEDIATELY: rb_sys::VALUE = 1;
 
 // Note: rb-sys may expose this as:
 // rb_sys::ruby_typed_free_flag::RUBY_TYPED_FREE_IMMEDIATELY
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[allow(dead_code)]
+    struct TestPoint {
+        x: f64,
+        y: f64,
+    }
+
+    impl TypedData for TestPoint {
+        fn class_name() -> &'static str {
+            "TestPoint"
+        }
+        fn data_type() -> &'static DataType {
+            static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+            DT.get_or_init(|| DataTypeBuilder::<TestPoint>::new("TestPoint").build())
+        }
+    }
+
+    #[test]
+    fn test_data_type_creation() {
+        let dt = TestPoint::data_type();
+        assert_eq!(dt.name().to_str().unwrap(), "TestPoint");
+    }
+
+    #[test]
+    fn test_data_type_builder_defaults() {
+        let dt = DataTypeBuilder::<TestPoint>::new("DefaultTest").build();
+        assert_eq!(dt.name().to_str().unwrap(), "DefaultTest");
+    }
+
+    #[test]
+    fn test_data_type_name_access() {
+        let dt = TestPoint::data_type();
+        let name_cstr = dt.name();
+        assert!(name_cstr.to_str().is_ok());
+        assert_eq!(name_cstr.to_str().unwrap(), "TestPoint");
+    }
+}

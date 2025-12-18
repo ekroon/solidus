@@ -178,3 +178,89 @@ pub fn get_mut<T: TypedData>(value: &Value) -> Result<&mut T, Error> {
     let reference = unsafe { &mut *(ptr as *mut T) };
     Ok(reference)
 }
+
+#[cfg(all(test, any(feature = "link-ruby", feature = "embed")))]
+mod ruby_tests {
+    use super::*;
+    use crate::convert::TryConvert;
+    use crate::typed_data::{DataType, DataTypeBuilder, TypedData};
+    use rb_sys_test_helpers::ruby_test;
+
+    struct TestPoint {
+        x: f64,
+        y: f64,
+    }
+
+    impl TypedData for TestPoint {
+        fn class_name() -> &'static str {
+            "TestPoint"
+        }
+        fn data_type() -> &'static DataType {
+            static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+            DT.get_or_init(|| DataTypeBuilder::<TestPoint>::new("TestPoint").build())
+        }
+    }
+
+    #[ruby_test]
+    fn test_wrap_and_get() {
+        // SAFETY: Ruby is initialized by rb_sys_test_helpers
+        let ruby = unsafe { Ruby::get() };
+        let object_class_val = ruby.class_object();
+        let object_class = RClass::try_convert(object_class_val).unwrap();
+
+        let point = TestPoint { x: 1.0, y: 2.0 };
+        let wrapped = wrap(&ruby, &object_class, point).unwrap();
+
+        let retrieved: &TestPoint = get(&wrapped).unwrap();
+        assert_eq!(retrieved.x, 1.0);
+        assert_eq!(retrieved.y, 2.0);
+    }
+
+    #[ruby_test]
+    fn test_wrap_and_get_mut() {
+        // SAFETY: Ruby is initialized by rb_sys_test_helpers
+        let ruby = unsafe { Ruby::get() };
+        let object_class_val = ruby.class_object();
+        let object_class = RClass::try_convert(object_class_val).unwrap();
+
+        let point = TestPoint { x: 1.0, y: 2.0 };
+        let wrapped = wrap(&ruby, &object_class, point).unwrap();
+
+        let retrieved: &mut TestPoint = get_mut(&wrapped).unwrap();
+        assert_eq!(retrieved.x, 1.0);
+        assert_eq!(retrieved.y, 2.0);
+
+        // Mutate the value
+        retrieved.x = 3.0;
+        retrieved.y = 4.0;
+
+        // Verify mutation
+        let retrieved2: &TestPoint = get(&wrapped).unwrap();
+        assert_eq!(retrieved2.x, 3.0);
+        assert_eq!(retrieved2.y, 4.0);
+    }
+
+    #[ruby_test]
+    fn test_multiple_wraps() {
+        // SAFETY: Ruby is initialized by rb_sys_test_helpers
+        let ruby = unsafe { Ruby::get() };
+        let object_class_val = ruby.class_object();
+        let object_class = RClass::try_convert(object_class_val).unwrap();
+
+        // Create and wrap multiple points
+        let point1 = TestPoint { x: 1.0, y: 2.0 };
+        let wrapped1 = wrap(&ruby, &object_class, point1).unwrap();
+
+        let point2 = TestPoint { x: 3.0, y: 4.0 };
+        let wrapped2 = wrap(&ruby, &object_class, point2).unwrap();
+
+        // Retrieve and verify both
+        let retrieved1: &TestPoint = get(&wrapped1).unwrap();
+        assert_eq!(retrieved1.x, 1.0);
+        assert_eq!(retrieved1.y, 2.0);
+
+        let retrieved2: &TestPoint = get(&wrapped2).unwrap();
+        assert_eq!(retrieved2.x, 3.0);
+        assert_eq!(retrieved2.y, 4.0);
+    }
+}
