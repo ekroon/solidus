@@ -136,7 +136,9 @@ pub mod prelude {
     pub use crate::init;
     pub use crate::pin_on_stack;
     pub use crate::ruby::Ruby;
-    pub use crate::typed_data::{DataTypeFunctions, TypedData, get, get_mut, wrap};
+    pub use crate::typed_data::{
+        Compactor, DataType, DataTypeFunctions, Marker, TypedData, get, get_mut, wrap,
+    };
     pub use crate::types::{
         Encoding, Fixnum, Float, Integer, Module, Qfalse, Qnil, Qtrue, RArray, RBignum, RClass,
         RFloat, RHash, RModule, RString, Symbol,
