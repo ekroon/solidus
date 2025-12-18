@@ -31,52 +31,27 @@ Shows how to:
 - Prevent Ruby values from being garbage collected while stored in Rust
 - **Mix primitive arguments** (`i64` for index) with Ruby VALUE types (`Pin<&StackPinned<Value>>`)
 
-## Parameter Type Rules
+## Primitive Argument Support
 
-The `#[solidus_macros::method]` and `#[solidus_macros::function]` macros handle different
-parameter types appropriately for GC safety:
-
-### Self Parameter (`rb_self`)
-
-The receiver (`rb_self`) does **not** need pinning because Ruby's method dispatch guarantees
-the receiver is live for the duration of the method call. Use the type directly:
+This example demonstrates the `#[solidus_macros::method]` and `#[solidus_macros::function]`
+attribute macros with support for Rust primitive types as direct arguments:
 
 ```rust
-#[solidus_macros::method]
-fn point_x(rb_self: Value) -> Result<f64, Error> { ... }
-```
-
-### Method Arguments
-
-Method arguments may need pinning depending on their type:
-
-1. **Rust primitives** (`i64`, `f64`, `bool`, `String`, etc.) - Use the type directly:
-   ```rust
-   #[solidus_macros::method]
-   fn container_get(rb_self: Value, index: i64) -> Result<Value, Error> { ... }
-   ```
-
-2. **Ruby VALUE types** (`Value`, `RString`, `RArray`, etc.) - Use `Pin<&StackPinned<T>>`:
-   ```rust
-   #[solidus_macros::method]
-   fn container_push(rb_self: Value, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> { ... }
-   ```
-
-Arguments need pinning because they may be computed values that are the only reference
-to a Ruby object. Without pinning, the GC could collect them during the method body.
-
-### Function Parameters
-
-Functions (no `rb_self`) follow the same rules for their parameters:
-
-```rust
-// Primitive arguments - no pinning needed
+// Primitive f64 arguments - no wrapping needed
 #[solidus_macros::function]
 fn point_new(x: f64, y: f64) -> Result<Value, Error> { ... }
 
-// Ruby VALUE arguments - use Pin<&StackPinned<T>>
+// Primitive i64 argument
 #[solidus_macros::function]
-fn process(value: Pin<&StackPinned<Value>>) -> Result<Value, Error> { ... }
+fn counter_new(initial: i64) -> Result<Value, Error> { ... }
+
+// Mixed: primitive i64 index with Ruby VALUE type
+#[solidus_macros::method]
+fn container_get(rb_self: Value, index: i64) -> Result<Value, Error> { ... }
+
+// Ruby VALUE types still use Pin<&StackPinned<T>> for GC safety
+#[solidus_macros::method]
+fn container_push(rb_self: Value, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> { ... }
 ```
 
 The macros automatically handle conversion from Ruby VALUEs to Rust primitives when

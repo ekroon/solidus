@@ -631,7 +631,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The generated wrapper handles:
 /// - Panic catching via `std::panic::catch_unwind`
 /// - Type conversion of `self` via `TryConvert`
-/// - Type conversion and stack pinning of arguments (but NOT self)
+/// - Type conversion and stack pinning of arguments
 /// - Error propagation (converts `Err` to Ruby exceptions)
 /// - Return value conversion via `ReturnValue`
 ///
@@ -640,24 +640,10 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The first parameter must be `self` (the Ruby receiver), and subsequent parameters
 /// are the method arguments.
 ///
-/// # Self Parameter
+/// # Automatic Pinning and Parameter Types
 ///
-/// The self parameter (`rb_self`) does **not** need pinning because Ruby's method dispatch
-/// guarantees the receiver is live for the duration of the method call. Use the type directly:
-///
-/// ```ignore
-/// #[solidus::method]
-/// fn point_x(rb_self: Value) -> Result<f64, Error> {
-///     let point: &Point = get(&rb_self)?;
-///     Ok(point.x())
-/// }
-/// ```
-///
-/// # Automatic Pinning for Arguments
-///
-/// The macro **automatically pins all method arguments on the stack** for GC safety. This
-/// happens in the generated wrapper code, not in your function body. Arguments (but not self)
-/// may be computed values that are the only reference to a Ruby object, so they need pinning.
+/// The macro **automatically pins all arguments on the stack** for GC safety. This
+/// happens in the generated wrapper code, not in your function body.
 ///
 /// You must choose the correct parameter type based on what you're working with:
 ///
@@ -1025,13 +1011,24 @@ fn generate_method_wrapper_dynamic(
     let mut conversion_stmts = Vec::new();
     let mut call_args = Vec::new();
 
-    // Self conversion - NEVER pinned because Ruby guarantees receiver liveness.
-    // This applies to all types (Value, RString, RArray, etc.) when used as self.
-    conversion_stmts.push(quote! {
-        let self_value = unsafe { solidus::Value::from_raw(rb_self) };
-        let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
-    });
-    call_args.push(quote! { self_converted });
+    // Self conversion - check if it needs pinning
+    if self_param.needs_pinning {
+        // Ruby VALUE type - needs pinning for GC safety
+        conversion_stmts.push(quote! {
+            let self_value = unsafe { solidus::Value::from_raw(rb_self) };
+            let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
+            solidus::pin_on_stack!(self_pinned = solidus::value::PinGuard::new(self_converted));
+        });
+        // Pass as .get().clone() to get the inner type back
+        call_args.push(quote! { self_pinned.get().clone() });
+    } else {
+        // Rust primitive - direct conversion, no pinning
+        conversion_stmts.push(quote! {
+            let self_value = unsafe { solidus::Value::from_raw(rb_self) };
+            let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
+        });
+        call_args.push(quote! { self_converted });
+    }
 
     // Argument conversions - conditionally pin based on type
     for (i, param) in params.iter().skip(1).enumerate() {
