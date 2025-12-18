@@ -34,7 +34,10 @@ use super::{Compactor, DataType, Marker};
 /// The `data_type()` method must return a reference to a `DataType` that correctly
 /// describes this type's memory layout and GC requirements. Using the `#[wrap]` macro
 /// ensures this is done correctly.
-pub trait TypedData: Sized + Send {
+///
+/// The `'static` bound is required because wrapped values are stored in Ruby objects
+/// and can live indefinitely (until the Ruby object is garbage collected).
+pub trait TypedData: Sized + Send + 'static {
     /// The Ruby class name for this type.
     ///
     /// This is used for error messages and debugging.

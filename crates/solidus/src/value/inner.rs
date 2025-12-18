@@ -197,6 +197,31 @@ impl Value {
         // SAFETY: Qfalse is always valid
         unsafe { Value::from_raw(rb_sys::Qfalse.into()) }
     }
+
+    /// Get the class name of this value.
+    ///
+    /// Returns the name of the Ruby class for this value.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use solidus::prelude::*;
+    ///
+    /// fn show_type(value: &Value) -> Result<(), Error> {
+    ///     let class_name = value.class_name()?;
+    ///     println!("Value is a {}", class_name);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn class_name(&self) -> Result<String, crate::error::Error> {
+        // SAFETY: rb_obj_classname is safe for any VALUE
+        let name_ptr = unsafe { rb_sys::rb_obj_classname(self.as_raw()) };
+        if name_ptr.is_null() {
+            return Err(crate::error::Error::runtime("could not get class name"));
+        }
+        let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
+        Ok(name.to_string_lossy().into_owned())
+    }
 }
 
 impl fmt::Debug for Value {
