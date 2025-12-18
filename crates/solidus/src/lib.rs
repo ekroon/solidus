@@ -98,8 +98,8 @@ pub use rb_sys;
 // Users should use:
 //   - solidus::method!(func, arity) for the declarative macro
 //   - #[solidus_macros::method] for the attribute macro
-// The #[init] attribute macro doesn't conflict, so it's re-exported.
-pub use solidus_macros::init;
+// The #[init] and #[wrap] attribute macros don't conflict, so they're re-exported.
+pub use solidus_macros::{init, wrap};
 
 // Modules
 pub mod convert;

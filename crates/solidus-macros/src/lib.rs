@@ -426,26 +426,157 @@ fn validate_name(name: &str) -> MacroResult<()> {
     Ok(())
 }
 
-/// Derives TypedData implementation for a Rust struct.
+/// Helper struct to hold parsed wrap attributes.
+struct WrapArgs {
+    class_name: String,
+    free_immediately: bool,
+    mark: bool,
+    compact: bool,
+    size: bool,
+}
+
+/// Parse the arguments to the #[wrap] attribute.
+fn parse_wrap_args(attr: TokenStream) -> MacroResult<WrapArgs> {
+    let mut class_name = None;
+    let mut free_immediately = true;
+    let mut mark = false;
+    let mut compact = false;
+    let mut size = false;
+
+    // Parse comma-separated items
+    let parser = syn::meta::parser(|meta| {
+        if meta.path.is_ident("class") {
+            let value: syn::LitStr = meta.value()?.parse()?;
+            class_name = Some(value.value());
+            Ok(())
+        } else if meta.path.is_ident("free_immediately") {
+            free_immediately = true;
+            Ok(())
+        } else if meta.path.is_ident("mark") {
+            mark = true;
+            Ok(())
+        } else if meta.path.is_ident("compact") {
+            compact = true;
+            Ok(())
+        } else if meta.path.is_ident("size") {
+            size = true;
+            Ok(())
+        } else {
+            Err(meta.error("unknown wrap attribute"))
+        }
+    });
+
+    syn::parse::Parser::parse(parser, attr)?;
+
+    let class_name = class_name.ok_or_else(|| {
+        syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "missing required `class` attribute",
+        )
+    })?;
+
+    Ok(WrapArgs {
+        class_name,
+        free_immediately,
+        mark,
+        compact,
+        size,
+    })
+}
+
+/// Marks a struct as wrappable in a Ruby object.
 ///
-/// This allows the struct to be wrapped as a Ruby object with proper
-/// garbage collection integration.
+/// This attribute macro generates an implementation of the `TypedData` trait
+/// for the annotated struct, allowing it to be wrapped as a Ruby object.
+///
+/// # Arguments
+///
+/// * `class = "Name"` - (Required) The Ruby class name for this type
+/// * `free_immediately` - Free memory immediately when collected (default: true)
+/// * `mark` - Enable GC marking (requires `DataTypeFunctions` impl)
+/// * `compact` - Enable GC compaction (requires `DataTypeFunctions` impl)
+/// * `size` - Enable size reporting (requires `DataTypeFunctions` impl)
 ///
 /// # Example
 ///
 /// ```ignore
 /// use solidus::prelude::*;
 ///
-/// #[wrap]
+/// #[solidus::wrap(class = "Point")]
 /// struct Point {
 ///     x: f64,
 ///     y: f64,
 /// }
+///
+/// // For types with Ruby values, add marking:
+/// #[solidus::wrap(class = "Container", mark)]
+/// struct Container {
+///     items: Vec<BoxValue<Value>>,
+/// }
+///
+/// impl DataTypeFunctions for Container {
+///     fn mark(&self, marker: &Marker) {
+///         for item in &self.items {
+///             marker.mark(item);
+///         }
+///     }
+/// }
 /// ```
 #[proc_macro_attribute]
-pub fn wrap(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    // TODO: Implement in Phase 4
-    item
+pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = match parse_wrap_args(attr) {
+        Ok(args) => args,
+        Err(e) => return e.to_compile_error().into(),
+    };
+
+    let input = parse_macro_input!(item as syn::ItemStruct);
+    let struct_name = &input.ident;
+    let class_name = &args.class_name;
+
+    // Build the DataTypeBuilder chain
+    let mut builder_chain = quote! {
+        solidus::typed_data::DataTypeBuilder::<#struct_name>::new(#class_name)
+    };
+
+    if args.free_immediately {
+        builder_chain = quote! { #builder_chain.free_immediately() };
+    }
+    if args.mark {
+        builder_chain = quote! { #builder_chain.mark() };
+    }
+    if args.compact {
+        builder_chain = quote! { #builder_chain.compact() };
+    }
+    if args.size {
+        builder_chain = quote! { #builder_chain.size() };
+    }
+
+    // Determine which build method to call
+    let build_call = if args.mark || args.compact || args.size {
+        quote! { #builder_chain.build_with_callbacks() }
+    } else {
+        quote! { #builder_chain.build() }
+    };
+
+    let expanded = quote! {
+        #input
+
+        impl solidus::typed_data::TypedData for #struct_name {
+            fn class_name() -> &'static str {
+                #class_name
+            }
+
+            fn data_type() -> &'static solidus::typed_data::DataType {
+                static DATA_TYPE: std::sync::OnceLock<solidus::typed_data::DataType> =
+                    std::sync::OnceLock::new();
+                DATA_TYPE.get_or_init(|| {
+                    #build_call
+                })
+            }
+        }
+    };
+
+    expanded.into()
 }
 
 /// Marks a function as a Ruby instance method.
