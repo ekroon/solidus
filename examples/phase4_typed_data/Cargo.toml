@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 solidus = { path = "../../crates/solidus" }
+solidus-macros = { path = "../../crates/solidus-macros" }
 rb-sys = "0.9"
 
 [build-dependencies]

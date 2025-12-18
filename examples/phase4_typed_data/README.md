@@ -12,6 +12,7 @@ Shows how to:
 - Wrap instances with the `wrap()` function
 - Unwrap instances with the `get()` function
 - Pass wrapped objects between Ruby and Rust
+- **Use primitive arguments** (`f64`) directly in function signatures
 
 ### Task 4.7.2: Counter with RefCell
 
@@ -19,6 +20,7 @@ Shows how to:
 - Use `RefCell<T>` for interior mutability
 - Safely mutate wrapped data from Ruby method calls
 - Follow Rust's borrowing rules even when called from Ruby
+- **Use primitive arguments** (`i64`) directly in function signatures
 
 ### Task 4.7.3: Container with GC Marking
 
@@ -27,19 +29,33 @@ Shows how to:
 - Implement `DataTypeFunctions` to mark contained Ruby values for GC
 - Use `#[solidus::wrap(class = "Container", mark)]` to enable GC marking
 - Prevent Ruby values from being garbage collected while stored in Rust
+- **Mix primitive arguments** (`i64` for index) with Ruby VALUE types (`Pin<&StackPinned<Value>>`)
 
-## Note on Compilation
+## Primitive Argument Support
 
-**This example currently does not compile** because the `function!` and `method!` macros
-don't yet support Rust primitive types (f64, i64, usize) as direct arguments. The macros
-currently expect all arguments to be Ruby VALUE types wrapped in `Pin<&StackPinned<T>>`.
+This example demonstrates the `#[solidus_macros::method]` and `#[solidus_macros::function]`
+attribute macros with support for Rust primitive types as direct arguments:
 
-To make this compile, the function signatures would need to use:
-- `Pin<&StackPinned<Float>>` instead of `f64`
-- `Pin<&StackPinned<Integer>>` instead of `i64`/`usize`
+```rust
+// Primitive f64 arguments - no wrapping needed
+#[solidus_macros::function]
+fn point_new(x: f64, y: f64) -> Result<Value, Error> { ... }
 
-This limitation will be addressed in future macro improvements. The TypedData API itself
-(wrap, get, get_mut, DataTypeFunctions) is fully functional.
+// Primitive i64 argument
+#[solidus_macros::function]
+fn counter_new(initial: i64) -> Result<Value, Error> { ... }
+
+// Mixed: primitive i64 index with Ruby VALUE type
+#[solidus_macros::method]
+fn container_get(rb_self: Value, index: i64) -> Result<Value, Error> { ... }
+
+// Ruby VALUE types still use Pin<&StackPinned<T>> for GC safety
+#[solidus_macros::method]
+fn container_push(rb_self: Value, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> { ... }
+```
+
+The macros automatically handle conversion from Ruby VALUEs to Rust primitives when
+the type implements `TryConvert`.
 
 ## Building
 
