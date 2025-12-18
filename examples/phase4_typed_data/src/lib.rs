@@ -49,20 +49,20 @@ fn point_new(x: f64, y: f64) -> Result<Value, Error> {
 }
 
 #[solidus_macros::method]
-fn point_x(rb_self: Value) -> Result<f64, Error> {
-    let point: &Point = get(&rb_self)?;
+fn point_x(rb_self: Pin<&StackPinned<Value>>) -> Result<f64, Error> {
+    let point: &Point = get(rb_self.get())?;
     Ok(point.x())
 }
 
 #[solidus_macros::method]
-fn point_y(rb_self: Value) -> Result<f64, Error> {
-    let point: &Point = get(&rb_self)?;
+fn point_y(rb_self: Pin<&StackPinned<Value>>) -> Result<f64, Error> {
+    let point: &Point = get(rb_self.get())?;
     Ok(point.y())
 }
 
 #[solidus_macros::method]
-fn point_distance(rb_self: Value, other: Pin<&StackPinned<Value>>) -> Result<f64, Error> {
-    let point: &Point = get(&rb_self)?;
+fn point_distance(rb_self: Pin<&StackPinned<Value>>, other: Pin<&StackPinned<Value>>) -> Result<f64, Error> {
+    let point: &Point = get(rb_self.get())?;
     let other_point: &Point = get(other.get())?;
     Ok(point.distance(other_point))
 }
@@ -106,14 +106,14 @@ fn counter_new(initial: i64) -> Result<Value, Error> {
 }
 
 #[solidus_macros::method]
-fn counter_get(rb_self: Value) -> Result<i64, Error> {
-    let counter: &Counter = get(&rb_self)?;
+fn counter_get(rb_self: Pin<&StackPinned<Value>>) -> Result<i64, Error> {
+    let counter: &Counter = get(rb_self.get())?;
     Ok(counter.get())
 }
 
 #[solidus_macros::method]
-fn counter_increment(rb_self: Value) -> Result<i64, Error> {
-    let counter: &Counter = get(&rb_self)?;
+fn counter_increment(rb_self: Pin<&StackPinned<Value>>) -> Result<i64, Error> {
+    let counter: &Counter = get(rb_self.get())?;
     Ok(counter.increment())
 }
 
@@ -164,22 +164,22 @@ fn container_new() -> Result<Value, Error> {
 }
 
 #[solidus_macros::method]
-fn container_push(rb_self: Value, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> {
-    let container: &mut Container = get_mut(&rb_self)?;
+fn container_push(rb_self: Pin<&StackPinned<Value>>, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> {
+    let container: &mut Container = get_mut(rb_self.get())?;
     let boxed = BoxValue::new(value.get().as_value());
     container.push(boxed);
-    Ok(rb_self)
+    Ok(rb_self.get().as_value())
 }
 
 #[solidus_macros::method]
-fn container_len(rb_self: Value) -> Result<usize, Error> {
-    let container: &Container = get(&rb_self)?;
+fn container_len(rb_self: Pin<&StackPinned<Value>>) -> Result<usize, Error> {
+    let container: &Container = get(rb_self.get())?;
     Ok(container.len())
 }
 
 #[solidus_macros::method]
-fn container_get(rb_self: Value, index: i64) -> Result<Value, Error> {
-    let container: &Container = get(&rb_self)?;
+fn container_get(rb_self: Pin<&StackPinned<Value>>, index: i64) -> Result<Value, Error> {
+    let container: &Container = get(rb_self.get())?;
     if index < 0 {
         return Err(Error::runtime("Index cannot be negative"));
     }

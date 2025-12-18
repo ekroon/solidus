@@ -45,14 +45,43 @@ fn point_new(x: f64, y: f64) -> Result<Value, Error> { ... }
 #[solidus_macros::function]
 fn counter_new(initial: i64) -> Result<Value, Error> { ... }
 
-// Mixed: primitive i64 index with Ruby VALUE type
+// ALL Ruby VALUE types (including self) use Pin<&StackPinned<T>> for GC safety
 #[solidus_macros::method]
-fn container_get(rb_self: Value, index: i64) -> Result<Value, Error> { ... }
+fn point_x(rb_self: Pin<&StackPinned<Value>>) -> Result<f64, Error> {
+    let point: &Point = get(rb_self.get())?;
+    Ok(point.x())
+}
 
-// Ruby VALUE types still use Pin<&StackPinned<T>> for GC safety
+// Mixed: pinned self with primitive i64 index
 #[solidus_macros::method]
-fn container_push(rb_self: Value, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> { ... }
+fn container_get(rb_self: Pin<&StackPinned<Value>>, index: i64) -> Result<Value, Error> {
+    let container: &Container = get(rb_self.get())?;
+    // ...
+}
+
+// Both self and value arguments use Pin<&StackPinned<T>>
+#[solidus_macros::method]
+fn container_push(rb_self: Pin<&StackPinned<Value>>, value: Pin<&StackPinned<Value>>) -> Result<Value, Error> {
+    let container: &mut Container = get_mut(rb_self.get())?;
+    // ...
+}
 ```
+
+### Why Self Needs Pinning
+
+The self parameter (like all Ruby VALUE types) needs `Pin<&StackPinned<Value>>` because:
+
+1. **GC Safety**: If we stored the self VALUE in a Vec or on the heap and then lost the 
+   stack reference on the Ruby side, it might get garbage collected.
+2. **Consistency**: The pinning requirement ensures users must use `BoxValue` if they want 
+   heap storage, which properly registers with Ruby's GC.
+3. **Compile-time Safety**: The type system prevents accidental heap storage of VALUEs.
+
+### Pinning Rules
+
+- **If `TryConvert` creates a new Rust value** (copy/clone like `i64`, `f64`, `String`): No pinning needed
+- **If `TryConvert` wraps a Ruby VALUE** (like `Value`, `RString`, `RArray`): Pinning IS required
+- **Self parameter**: Always pinned for Ruby VALUE types
 
 The macros automatically handle conversion from Ruby VALUEs to Rust primitives when
 the type implements `TryConvert`.

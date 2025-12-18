@@ -16,15 +16,16 @@
 //! stack for GC safety. However, you must use the correct parameter type based on what
 //! you're passing:
 //!
-//! ## Ruby VALUE Types (RString, RArray, etc.)
+//! ## Ruby VALUE Types (Value, RString, RArray, etc.)
 //!
-//! For Ruby VALUE types, you **must** use `Pin<&StackPinned<T>>` in your function
-//! signature to ensure type safety:
+//! For Ruby VALUE types, including the self parameter, you **must** use
+//! `Pin<&StackPinned<T>>` in your function signature to ensure type safety:
 //!
 //! ```ignore
 //! #[solidus::method]
-//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+//! fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 //!     // Access the inner value with .get()
+//!     let self_str = rb_self.get().to_string()?;
 //!     let other_str = other.get().to_string()?;
 //!     // ...
 //! }
@@ -39,7 +40,7 @@
 //!
 //! ```ignore
 //! #[solidus::method]
-//! fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
+//! fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<PinGuard<RString>, Error> {
 //!     // Use `count` directly as i64
 //! }
 //! ```
@@ -647,14 +648,15 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// You must choose the correct parameter type based on what you're working with:
 ///
-/// ## Ruby VALUE Types (RString, RArray, etc.)
+/// ## Ruby VALUE Types (Value, RString, RArray, etc.)
 ///
-/// For Ruby VALUE types, use `Pin<&StackPinned<T>>` in your function signature:
+/// For Ruby VALUE types, including the self parameter, use `Pin<&StackPinned<T>>`
+/// in your function signature:
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
-///     let self_str = rb_self.to_string()?;
+/// fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+///     let self_str = rb_self.get().to_string()?;
 ///     let other_str = other.get().to_string()?;  // Access with .get()
 ///     RString::new(&format!("{}{}", self_str, other_str))
 /// }
@@ -669,8 +671,8 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
-///     let s = rb_self.to_string()?;
+/// fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<PinGuard<RString>, Error> {
+///     let s = rb_self.get().to_string()?;
 ///     RString::new(&s.repeat(count as usize))
 /// }
 /// ```
@@ -684,16 +686,16 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
-///     Ok(rb_self.into())
+/// fn greet(rb_self: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+///     // ...
 /// }
 /// ```
 ///
 /// The macro generates:
 ///
 /// ```ignore
-/// fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
-///     Ok(rb_self.into())
+/// fn greet(rb_self: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+///     // ...
 /// }
 ///
 /// #[doc(hidden)]
@@ -714,18 +716,18 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```ignore
 /// use solidus::prelude::*;
 ///
-/// // Ruby VALUE types use Pin<&StackPinned<T>>
+/// // Ruby VALUE types (including self) use Pin<&StackPinned<T>>
 /// #[solidus::method]
-/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
-///     let self_str = rb_self.to_string()?;
+/// fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+///     let self_str = rb_self.get().to_string()?;
 ///     let other_str = other.get().to_string()?;
 ///     RString::new(&format!("{}{}", self_str, other_str))
 /// }
 ///
-/// // Rust primitives use the type directly
+/// // Mixed: pinned self with Rust primitive
 /// #[solidus::method]
-/// fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
-///     let s = rb_self.to_string()?;
+/// fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<PinGuard<RString>, Error> {
+///     let s = rb_self.get().to_string()?;
 ///     RString::new(&s.repeat(count as usize))
 /// }
 ///
@@ -990,13 +992,12 @@ fn generate_method_wrapper_dynamic(
         ));
     }
 
-    // First param is self (no pinning needed).
-    // DESIGN: The self parameter does not need pinning because:
-    // 1. It comes directly from Ruby (rb_self) and Ruby guarantees the receiver is live
-    //    for the duration of the method call.
-    // 2. The method dispatch itself keeps the receiver on Ruby's stack, protecting it from GC.
-    // 3. Arguments, however, may have been computed and could be the only reference to an
-    //    object, so they need explicit pinning to prevent GC during the method body.
+    // First param is self. It needs the same pinning rules as other Ruby VALUE types.
+    // DESIGN: The self parameter needs pinning when it's a Ruby VALUE type because:
+    // 1. If user stores the VALUE in a Vec or on the heap and loses the Ruby stack reference,
+    //    it could be garbage collected.
+    // 2. The pinning requirement ensures users must use BoxValue for heap storage.
+    // 3. Users can opt-out of pinning by using non-VALUE types (like primitive conversions).
     let self_param = &params[0];
     let self_type = &self_param.inner_type;
 
@@ -1019,8 +1020,14 @@ fn generate_method_wrapper_dynamic(
             let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
             solidus::pin_on_stack!(self_pinned = solidus::value::PinGuard::new(self_converted));
         });
-        // Pass as .get().clone() to get the inner type back
-        call_args.push(quote! { self_pinned.get().clone() });
+        // Determine how to pass the argument to the user function
+        if self_param.is_explicit_pinned {
+            // User wants Pin<&StackPinned<T>>, pass the pinned reference directly
+            call_args.push(quote! { self_pinned });
+        } else {
+            // User wants T directly - pass .get().clone()
+            call_args.push(quote! { self_pinned.get().clone() });
+        }
     } else {
         // Rust primitive - direct conversion, no pinning
         conversion_stmts.push(quote! {
