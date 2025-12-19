@@ -320,7 +320,7 @@ fn init_impl(
         /// Ruby extension entry point.
         ///
         /// This function is automatically called by Ruby when the extension is loaded.
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         #[allow(unsafe_op_in_unsafe_fn)]
         pub unsafe extern "C" fn #init_fn_ident() {
             // SAFETY: This function is the Ruby extension entry point and is called by Ruby.

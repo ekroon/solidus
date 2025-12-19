@@ -14,7 +14,7 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```no_run
 //! use solidus::prelude::*;
 //! use solidus::types::{Fixnum, RString};
 //!

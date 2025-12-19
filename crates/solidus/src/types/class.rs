@@ -11,7 +11,7 @@ use crate::value::{ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::RClass;
 ///
 /// // Get the String class
@@ -39,7 +39,7 @@ impl RClass {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RClass;
     ///
     /// let string_class = RClass::from_name("String").unwrap();
@@ -82,7 +82,7 @@ impl RClass {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RClass;
     ///
     /// let string_class = RClass::from_name("String").unwrap();
@@ -115,7 +115,7 @@ impl RClass {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RClass;
     ///
     /// let string_class = RClass::from_name("String").unwrap();

@@ -19,15 +19,14 @@ use super::Value;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::value::{Value, ReprValue};
+/// use solidus::types::RString;
+/// use solidus::pin_on_stack;
 ///
 /// // All Ruby type wrappers implement ReprValue
-/// let string: RString = /* ... */;
-/// let value: Value = string.as_value();
-///
-/// // Convert back (unchecked)
-/// let string_again: RString = unsafe { RString::from_value_unchecked(value) };
+/// pin_on_stack!(string = RString::new("hello"));
+/// let value: Value = string.get().as_value();
 /// ```
 pub trait ReprValue: Clone {
     /// Get this value as a base Value.

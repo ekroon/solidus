@@ -16,8 +16,9 @@ use crate::value::{PinGuard, ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::RString;
+/// use solidus::pin_on_stack;
 ///
 /// pin_on_stack!(s = RString::new("hello"));
 /// assert_eq!(s.get().len(), 5);
@@ -34,7 +35,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     /// use solidus::pin_on_stack;
     ///
@@ -55,7 +56,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     /// use solidus::pin_on_stack;
     ///
@@ -80,7 +81,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     ///
     /// let s = RString::new("hello");
@@ -96,7 +97,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     ///
     /// let s = RString::new("");
@@ -124,7 +125,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     ///
     /// let s = RString::new("hello");
@@ -148,7 +149,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     ///
     /// let s = RString::new("hello");
@@ -171,7 +172,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     ///
     /// let s = RString::new("hello");
@@ -186,7 +187,7 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RString;
     ///
     /// let s = RString::new("hello");
@@ -204,12 +205,13 @@ impl RString {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use solidus::types::RString;
+    /// ```no_run
+    /// use solidus::types::{RString, Encoding};
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello");
+    /// pin_on_stack!(s = RString::new("hello"));
     /// let utf8 = Encoding::utf8();
-    /// let encoded = s.encode(utf8).unwrap();
+    /// let encoded = s.get().encode(utf8).unwrap();
     /// ```
     pub fn encode(&self, encoding: Encoding) -> Result<RString, Error> {
         // SAFETY: self.0 is a valid Ruby string, encoding.ptr is a valid encoding
@@ -290,7 +292,7 @@ impl IntoValue for &str {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::{RString, Encoding};
 ///
 /// let enc = Encoding::utf8();
@@ -336,7 +338,7 @@ impl Encoding {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::Encoding;
     ///
     /// let enc = Encoding::find("UTF-8").unwrap();
@@ -362,7 +364,7 @@ impl Encoding {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::Encoding;
     ///
     /// let enc = Encoding::utf8();

@@ -25,7 +25,7 @@ use super::TypedData;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::prelude::*;
 /// use solidus::typed_data::{wrap, TypedData};
 ///
@@ -77,8 +77,19 @@ pub fn wrap<T: TypedData>(_ruby: &Ruby, class: &RClass, value: T) -> Result<Valu
 ///
 /// # Example
 ///
-/// ```ignore
-/// use solidus::typed_data::get;
+/// ```no_run
+/// use solidus::prelude::*;
+/// use solidus::typed_data::{get, DataType, DataTypeBuilder, TypedData};
+///
+/// struct Point { x: f64, y: f64 }
+///
+/// impl TypedData for Point {
+///     fn class_name() -> &'static str { "Point" }
+///     fn data_type() -> &'static DataType {
+///         static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+///         DT.get_or_init(|| DataTypeBuilder::<Point>::new("Point").build())
+///     }
+/// }
 ///
 /// fn point_x(rb_self: Value) -> Result<f64, Error> {
 ///     let point: &Point = get(&rb_self)?;
@@ -130,7 +141,7 @@ pub fn get<T: TypedData>(value: &Value) -> Result<&T, Error> {
 /// you will have undefined behavior. For safe mutation, use `RefCell<T>` inside your
 /// wrapped type:
 ///
-/// ```ignore
+/// ```no_run
 /// use std::cell::RefCell;
 ///
 /// #[solidus::wrap(class = "Counter")]

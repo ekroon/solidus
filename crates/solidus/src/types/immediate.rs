@@ -13,8 +13,9 @@ use crate::value::{ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Qnil;
+/// use solidus::value::ReprValue;
 ///
 /// let nil = Qnil::new();
 /// assert!(nil.as_value().is_nil());
@@ -71,8 +72,9 @@ impl IntoValue for Qnil {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Qtrue;
+/// use solidus::value::ReprValue;
 ///
 /// let t = Qtrue::new();
 /// assert!(t.as_value().is_true());
@@ -129,8 +131,9 @@ impl IntoValue for Qtrue {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Qfalse;
+/// use solidus::value::ReprValue;
 ///
 /// let f = Qfalse::new();
 /// assert!(f.as_value().is_false());

@@ -13,7 +13,7 @@ use crate::value::{PinGuard, ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::RHash;
 ///
 /// let hash = RHash::new();
@@ -32,7 +32,7 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RHash;
     /// use solidus::pin_on_stack;
     ///
@@ -52,7 +52,7 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RHash;
     ///
     /// let hash = RHash::new();
@@ -70,7 +70,7 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RHash;
     ///
     /// let hash = RHash::new();
@@ -95,16 +95,20 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
+    /// use solidus::convert::TryConvert;
     ///
     /// let hash = RHash::new();
     /// hash.insert("key", 42i64);
     ///
     /// let val = hash.get("key").unwrap();
-    /// assert_eq!(i64::try_convert(val).unwrap(), 42);
+    /// assert_eq!(i64::try_convert(val)?, 42);
     ///
     /// assert!(hash.get("missing").is_none());
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn get<K: IntoValue>(&self, key: K) -> Option<Value> {
         let key_val = key.into_value();
@@ -125,7 +129,7 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RHash;
     ///
     /// let hash = RHash::new();
@@ -151,17 +155,21 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
+    /// use solidus::convert::TryConvert;
     ///
     /// let hash = RHash::new();
     /// hash.insert("key", 42i64);
     ///
     /// let val = hash.delete("key").unwrap();
-    /// assert_eq!(i64::try_convert(val).unwrap(), 42);
+    /// assert_eq!(i64::try_convert(val)?, 42);
     /// assert_eq!(hash.len(), 0);
     ///
     /// assert!(hash.delete("key").is_none());
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn delete<K: IntoValue>(&self, key: K) -> Option<Value> {
         let key_val = key.into_value();
@@ -188,8 +196,10 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
+    /// use solidus::convert::TryConvert;
     ///
     /// let hash = RHash::new();
     /// hash.insert("a", 1i64);
@@ -202,6 +212,8 @@ impl RHash {
     ///     Ok(())
     /// })?;
     /// assert_eq!(sum, 3);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn each<F>(&self, mut f: F) -> Result<(), Error>
     where
@@ -261,7 +273,8 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use std::collections::HashMap;
     ///
@@ -272,6 +285,8 @@ impl RHash {
     /// let map: HashMap<String, i64> = hash.to_hash_map()?;
     /// assert_eq!(map.get("a"), Some(&1));
     /// assert_eq!(map.get("b"), Some(&2));
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn to_hash_map<K, V>(&self) -> Result<HashMap<K, V>, Error>
     where
@@ -297,7 +312,7 @@ impl RHash {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RHash;
     /// use solidus::pin_on_stack;
     /// use std::collections::HashMap;

@@ -28,7 +28,7 @@ use crate::types::Flonum;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::method::MethodArg;
 /// use solidus::types::{Fixnum, RString};
 ///

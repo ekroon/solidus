@@ -24,8 +24,8 @@ thread_local! {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use solidus::Ruby;
+/// ```no_run
+/// use solidus::prelude::*;
 ///
 /// #[solidus::init]
 /// fn init(ruby: &Ruby) -> Result<(), Error> {
@@ -52,7 +52,9 @@ impl Ruby {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// use solidus::Ruby;
+    ///
     /// // In an extern "C" function called from Ruby:
     /// let ruby = unsafe { Ruby::get() };
     /// let nil = ruby.qnil();
@@ -238,8 +240,11 @@ impl Ruby {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// let my_class = ruby.define_class("MyClass", ruby.class_object())?;
+    /// ```no_run
+    /// use solidus::Ruby;
+    ///
+    /// let ruby = unsafe { Ruby::get() };
+    /// let my_class = ruby.define_class("MyClass", ruby.class_object());
     /// ```
     pub fn define_class(&self, name: &str, superclass: Value) -> Value {
         let c_name = std::ffi::CString::new(name).expect("class name contains null byte");
@@ -260,8 +265,11 @@ impl Ruby {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// let my_module = ruby.define_module("MyModule")?;
+    /// ```no_run
+    /// use solidus::Ruby;
+    ///
+    /// let ruby = unsafe { Ruby::get() };
+    /// let my_module = ruby.define_module("MyModule");
     /// ```
     pub fn define_module(&self, name: &str) -> Value {
         let c_name = std::ffi::CString::new(name).expect("module name contains null byte");
@@ -319,15 +327,16 @@ impl Ruby {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use solidus::{function, Ruby};
+    /// ```no_run
+    /// use solidus::{function, Ruby, PinGuard, Error};
+    /// use solidus::types::RString;
     ///
-    /// fn greet() -> Result<RString, Error> {
+    /// fn greet() -> Result<PinGuard<RString>, Error> {
     ///     Ok(RString::new("Hello, World!"))
     /// }
     ///
     /// let ruby = unsafe { Ruby::get() };
-    /// ruby.define_global_function("greet", function!(greet, 0), 0)?;
+    /// ruby.define_global_function("greet", function!(greet, 0), 0).unwrap();
     /// // Now `greet` can be called from Ruby without qualification
     /// ```
     pub fn define_global_function(

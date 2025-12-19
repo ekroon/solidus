@@ -14,7 +14,7 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```no_run
 //! use solidus::prelude::*;
 //!
 //! // Define a method
@@ -53,7 +53,7 @@ pub use return_value::ReturnValue;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::prelude::*;
 ///
 /// // Arity 0 - just self
@@ -296,16 +296,16 @@ macro_rules! method {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::prelude::*;
 ///
 /// // Arity 0 - no arguments
-/// fn greet() -> Result<RString, Error> {
+/// fn greet() -> Result<PinGuard<RString>, Error> {
 ///     Ok(RString::new("Hello, World!"))
 /// }
 ///
 /// // Arity 1 - one argument
-/// fn greet_name(name: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+/// fn greet_name(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 ///     // name is automatically pinned by the wrapper
 ///     Ok(RString::new(&format!("Hello, {}!", name.get().to_string()?)))
 /// }

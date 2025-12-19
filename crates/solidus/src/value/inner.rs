@@ -204,7 +204,7 @@ impl Value {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::prelude::*;
     ///
     /// fn show_type(value: &Value) -> Result<(), Error> {

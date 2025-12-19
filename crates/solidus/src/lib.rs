@@ -27,15 +27,14 @@
 //! - Pinned on the stack with `.pin()` (common case)
 //! - Boxed for heap storage with `.into_box()` (explicit GC registration)
 //!
-//! ```ignore
+//! ```no_run
 //! use solidus::prelude::*;
 //!
 //! // Creating a value returns a PinGuard
 //! let guard = RString::new("hello");
 //!
 //! // Option 1: Pin on stack (fast, common case)
-//! let pinned = guard.pin();
-//! pin_on_stack!(s = pinned);
+//! pin_on_stack!(s = guard);
 //! // s is Pin<&StackPinned<RString>>, cannot be moved to heap
 //!
 //! // Option 2: Box for heap storage (for collections)
@@ -60,21 +59,23 @@
 //!
 //! Define Rust functions as Ruby methods using `method!` or `function!` macros:
 //!
-//! ```ignore
+//! ```no_run
 //! use solidus::prelude::*;
+//! use solidus::method;
 //!
 //! // Method that takes pinned arguments
 //! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 //!     let self_str = rb_self.to_string()?;
 //!     let other_str = other.get().to_string()?;
-//!     RString::new(&format!("{}{}", self_str, other_str))
+//!     Ok(RString::new(&format!("{}{}", self_str, other_str)))
 //! }
 //!
 //! // Initialize the extension
 //! #[solidus::init]
 //! fn init(ruby: &Ruby) -> Result<(), Error> {
-//!     let class = ruby.define_class("MyString", ruby.class_object())?;
-//!     class.define_method("concat", method!(concat, 1))?;
+//!     let class_val = ruby.define_class("MyString", ruby.class_object());
+//!     let class = RClass::try_convert(class_val)?;
+//!     class.define_method("concat", method!(concat, 1), 1)?;
 //!     Ok(())
 //! }
 //! ```

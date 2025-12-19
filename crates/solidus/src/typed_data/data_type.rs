@@ -44,10 +44,18 @@ unsafe impl Sync for DataType {}
 ///
 /// # Example
 ///
-/// ```ignore
-/// use solidus::typed_data::{DataType, DataTypeBuilder};
+/// ```no_run
+/// use solidus::typed_data::{DataType, DataTypeBuilder, TypedData};
 ///
 /// struct Point { x: f64, y: f64 }
+///
+/// impl TypedData for Point {
+///     fn class_name() -> &'static str { "Point" }
+///     fn data_type() -> &'static DataType {
+///         static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+///         DT.get_or_init(|| DataTypeBuilder::<Point>::new("Point").build())
+///     }
+/// }
 ///
 /// let data_type: DataType = DataTypeBuilder::<Point>::new("Point")
 ///     .free_immediately()

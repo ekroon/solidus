@@ -97,7 +97,7 @@ impl ErrorClass {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::{Error, ExceptionClass};
 ///
 /// fn validate_age(age: i64) -> Result<(), Error> {

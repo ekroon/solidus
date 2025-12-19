@@ -14,7 +14,7 @@ use crate::value::{PinGuard, ReprValue, Value, ValueType};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Flonum;
 ///
 /// let num = Flonum::from_f64(3.14).expect("3.14 can be a Flonum");
@@ -92,7 +92,7 @@ impl IntoValue for Flonum {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::RFloat;
 ///
 /// let num = RFloat::from_f64(3.14159265358979);
@@ -162,7 +162,7 @@ impl IntoValue for RFloat {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Float;
 ///
 /// let small = Float::from_f64(1.5);

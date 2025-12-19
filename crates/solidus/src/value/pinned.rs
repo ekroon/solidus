@@ -20,12 +20,14 @@ use std::pin::Pin;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use std::pin::Pin;
 /// use solidus::value::StackPinned;
+/// use solidus::types::RString;
+/// use solidus::pin_on_stack;
 ///
 /// // The pin_on_stack! macro creates a pinned reference
-/// pin_on_stack!(value = some_ruby_string);
+/// pin_on_stack!(value = RString::new("hello"));
 ///
 /// // Now `value` is a Pin<&StackPinned<RString>>
 /// // It cannot be moved to the heap
@@ -107,7 +109,7 @@ impl<T> Deref for StackPinned<T> {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::pin_on_stack;
 /// use solidus::types::RString;
 ///

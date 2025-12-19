@@ -28,12 +28,15 @@ use crate::gc;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::BoxValue;
+/// use solidus::types::RString;
+/// use solidus::pin_on_stack;
 ///
 /// // Store Ruby values in a Vec
 /// let mut strings: Vec<BoxValue<RString>> = Vec::new();
-/// strings.push(BoxValue::new(ruby_string));
+/// pin_on_stack!(ruby_string = RString::new("hello"));
+/// strings.push(BoxValue::new(ruby_string.get().clone()));
 ///
 /// // The Ruby string is protected from GC as long as the BoxValue exists
 /// ```

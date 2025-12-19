@@ -10,8 +10,8 @@ use crate::value::{BoxValue, ReprValue};
 ///
 /// # Example
 ///
-/// ```ignore
-/// use solidus::typed_data::{DataTypeFunctions, Marker};
+/// ```no_run
+/// use solidus::typed_data::{DataType, DataTypeBuilder, DataTypeFunctions, Marker, TypedData};
 /// use solidus::BoxValue;
 /// use solidus::Value;
 ///
@@ -19,10 +19,18 @@ use crate::value::{BoxValue, ReprValue};
 ///     items: Vec<BoxValue<Value>>,
 /// }
 ///
+/// impl TypedData for Container {
+///     fn class_name() -> &'static str { "Container" }
+///     fn data_type() -> &'static DataType {
+///         static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+///         DT.get_or_init(|| DataTypeBuilder::<Container>::new("Container").mark().build_with_callbacks())
+///     }
+/// }
+///
 /// impl DataTypeFunctions for Container {
 ///     fn mark(&self, marker: &Marker) {
 ///         for item in &self.items {
-///             marker.mark(item);
+///             marker.mark(&**item);
 ///         }
 ///     }
 /// }
@@ -67,13 +75,21 @@ impl Marker {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use solidus::typed_data::{DataTypeFunctions, Compactor};
+/// ```no_run
+/// use solidus::typed_data::{DataType, DataTypeBuilder, DataTypeFunctions, Compactor, TypedData};
 /// use solidus::Value;
 ///
 /// struct Container {
 ///     // Raw VALUE stored (unusual, but possible)
 ///     cached_value: rb_sys::VALUE,
+/// }
+///
+/// impl TypedData for Container {
+///     fn class_name() -> &'static str { "Container" }
+///     fn data_type() -> &'static DataType {
+///         static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+///         DT.get_or_init(|| DataTypeBuilder::<Container>::new("Container").compact().build_with_callbacks())
+///     }
 /// }
 ///
 /// impl DataTypeFunctions for Container {

@@ -21,12 +21,12 @@ use crate::value::Value;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::prelude::*;
 /// use solidus::method::ReturnValue;
 ///
-/// fn example() -> Result<RString, Error> {
-///     RString::new("hello").into_return_value()
+/// fn example() -> Result<PinGuard<RString>, Error> {
+///     Ok(RString::new("hello"))
 /// }
 /// ```
 pub trait ReturnValue {

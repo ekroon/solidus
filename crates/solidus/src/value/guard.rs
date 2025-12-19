@@ -37,7 +37,7 @@ use super::{BoxValue, ReprValue};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::RString;
 /// use solidus::pin_on_stack;
 ///
@@ -59,7 +59,9 @@ use super::{BoxValue, ReprValue};
 ///
 /// If you create a value and don't pin or box it, you'll get a compiler warning:
 ///
-/// ```ignore
+/// ```no_run
+/// use solidus::types::RString;
+///
 /// let _ = RString::new("oops"); // Warning: VALUE must be pinned on stack or explicitly boxed
 /// ```
 ///
@@ -67,10 +69,13 @@ use super::{BoxValue, ReprValue};
 ///
 /// The critical safety property is that pinning must be **atomic with guard consumption**.
 /// The old design with `.pin()` had a gap:
-/// ```ignore
+/// ```no_run
+/// use solidus::types::RString;
+/// use solidus::pin_on_stack;
+///
 /// let guard = RString::new("hello");
-/// let stack_pinned = guard.pin();  // Returns StackPinned<T>
-/// let vec = vec![stack_pinned];    // DANGER! Moved to heap!
+/// pin_on_stack!(stack_pinned = guard);
+/// // stack_pinned is now Pin<&StackPinned<RString>>
 /// ```
 /// The new design eliminates this by making `pin_on_stack!` consume the guard directly,
 /// creating the StackPinned and pinning it atomically in one step.
@@ -119,7 +124,7 @@ impl<T: ReprValue> PinGuard<T> {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::{RString, BoxValue};
     ///
     /// let guard = RString::new("hello");

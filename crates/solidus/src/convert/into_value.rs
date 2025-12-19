@@ -9,7 +9,7 @@ use crate::value::Value;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::prelude::*;
 ///
 /// fn example() -> Value {

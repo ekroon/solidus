@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```no_run
 //! use solidus::prelude::*;
 //!
 //! #[solidus::wrap(class = "Point")]

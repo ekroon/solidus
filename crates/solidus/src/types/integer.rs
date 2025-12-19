@@ -13,7 +13,7 @@ use crate::value::{PinGuard, ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Fixnum;
 ///
 /// let num = Fixnum::from_i64(42).expect("42 fits in a Fixnum");
@@ -30,7 +30,7 @@ impl Fixnum {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::Fixnum;
     ///
     /// assert!(Fixnum::from_i64(42).is_some());
@@ -276,11 +276,19 @@ impl IntoValue for usize {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use solidus::types::RBignum;
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use solidus::types::{RBignum, Integer};
+/// use solidus::convert::TryConvert;
+/// use solidus::value::ReprValue;
 ///
-/// let big = RBignum::from_value(some_large_ruby_value).unwrap();
-/// let n = big.to_i64().unwrap();
+/// // Create a large integer via Integer and convert to bignum if needed
+/// let large = Integer::from_u64(u64::MAX);
+/// // large.to_u64() returns a Result
+/// let n = large.to_u64()?;
+/// assert_eq!(n, u64::MAX);
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]
@@ -390,7 +398,7 @@ impl IntoValue for RBignum {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Integer;
 ///
 /// let small = Integer::from_i64(42);

@@ -12,7 +12,7 @@ use crate::value::{ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::RModule;
 ///
 /// // Get the Enumerable module
@@ -30,7 +30,7 @@ impl RModule {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RModule;
     ///
     /// let enumerable = RModule::from_name("Enumerable").unwrap();
@@ -82,7 +82,7 @@ impl RModule {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RModule;
     ///
     /// let enumerable = RModule::from_name("Enumerable").unwrap();
@@ -146,7 +146,7 @@ impl IntoValue for RModule {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::{RClass, Module};
 ///
 /// let string_class = RClass::from_name("String").unwrap();
@@ -160,7 +160,7 @@ pub trait Module: ReprValue {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::{RClass, Module};
     ///
     /// let string_class = RClass::from_name("String").unwrap();
@@ -191,7 +191,7 @@ pub trait Module: ReprValue {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::{RClass, Module};
     ///
     /// let file_class = RClass::from_name("File").unwrap();
@@ -234,18 +234,21 @@ pub trait Module: ReprValue {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use solidus::{method, Ruby, Module};
-    /// use solidus::types::RClass;
+    /// ```no_run
+    /// use solidus::prelude::*;
+    /// use solidus::method;
     ///
-    /// fn my_method(rb_self: RString) -> Result<RString, Error> {
-    ///     Ok(rb_self)
+    /// fn my_method(rb_self: RString) -> Result<PinGuard<RString>, Error> {
+    ///     Ok(RString::new("result"))
     /// }
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let ruby = unsafe { Ruby::get() };
     /// let class = ruby.define_class("MyClass", ruby.class_object());
     /// let rclass = RClass::try_convert(class)?;
     /// rclass.define_method("my_method", method!(my_method, 0), 0)?;
+    /// # Ok(())
+    /// # }
     /// ```
     fn define_method(
         self,
@@ -280,18 +283,21 @@ pub trait Module: ReprValue {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use solidus::{function, Ruby, Module};
-    /// use solidus::types::RClass;
+    /// ```no_run
+    /// use solidus::prelude::*;
+    /// use solidus::function;
     ///
     /// fn class_method() -> Result<i64, Error> {
     ///     Ok(42)
     /// }
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let ruby = unsafe { Ruby::get() };
     /// let class = ruby.define_class("MyClass", ruby.class_object());
     /// let rclass = RClass::try_convert(class)?;
     /// rclass.define_singleton_method("class_method", function!(class_method, 0), 0)?;
+    /// # Ok(())
+    /// # }
     /// ```
     fn define_singleton_method(
         self,
@@ -331,18 +337,21 @@ pub trait Module: ReprValue {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use solidus::{function, Ruby, Module};
-    /// use solidus::types::RModule;
+    /// ```no_run
+    /// use solidus::prelude::*;
+    /// use solidus::function;
     ///
     /// fn my_function() -> Result<i64, Error> {
     ///     Ok(42)
     /// }
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let ruby = unsafe { Ruby::get() };
     /// let module = ruby.define_module("MyModule");
     /// let rmodule = RModule::try_convert(module)?;
     /// rmodule.define_module_function("my_function", function!(my_function, 0), 0)?;
+    /// # Ok(())
+    /// # }
     /// ```
     fn define_module_function(
         self,

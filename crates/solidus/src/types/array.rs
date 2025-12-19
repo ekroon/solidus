@@ -11,7 +11,7 @@ use crate::value::{PinGuard, ReprValue, Value};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::RArray;
 ///
 /// let arr = RArray::new();
@@ -31,7 +31,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     /// use solidus::pin_on_stack;
     ///
@@ -57,7 +57,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     /// use solidus::pin_on_stack;
     ///
@@ -76,7 +76,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     ///
     /// let arr = RArray::new();
@@ -94,7 +94,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     ///
     /// let arr = RArray::new();
@@ -114,7 +114,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     ///
     /// let arr = RArray::new();
@@ -136,7 +136,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     ///
     /// let arr = RArray::new();
@@ -167,7 +167,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     ///
     /// let arr = RArray::new();
@@ -192,7 +192,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     ///
     /// let arr = RArray::new();
@@ -222,8 +222,10 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RArray;
+    /// use solidus::convert::TryConvert;
     ///
     /// let arr = RArray::new();
     /// arr.push(1);
@@ -237,6 +239,8 @@ impl RArray {
     ///     Ok(())
     /// })?;
     /// assert_eq!(sum, 6);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn each<F>(&self, mut f: F) -> Result<(), Error>
     where
@@ -257,7 +261,7 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::RArray;
     /// use solidus::pin_on_stack;
     ///
@@ -282,8 +286,10 @@ impl RArray {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RArray;
+    /// use solidus::convert::TryConvert;
     ///
     /// let arr = RArray::new();
     /// arr.push(1);
@@ -292,6 +298,8 @@ impl RArray {
     ///
     /// let vec: Vec<i64> = arr.to_vec()?;
     /// assert_eq!(vec, vec![1, 2, 3]);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn to_vec<T: TryConvert>(&self) -> Result<Vec<T>, Error> {
         let len = self.len();

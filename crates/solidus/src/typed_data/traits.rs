@@ -7,7 +7,7 @@ use super::{Compactor, DataType, Marker};
 ///
 /// # Example (manual implementation)
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::typed_data::{DataType, DataTypeBuilder, TypedData};
 ///
 /// struct Point {
@@ -64,19 +64,26 @@ pub trait TypedData: Sized + Send + 'static {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::prelude::*;
-/// use solidus::typed_data::{DataTypeFunctions, Marker, Compactor};
+/// use solidus::typed_data::{DataType, DataTypeBuilder, DataTypeFunctions, Marker, Compactor};
 ///
-/// #[solidus::wrap(class = "Container", mark)]
 /// struct Container {
 ///     items: Vec<BoxValue<Value>>,
+/// }
+///
+/// impl TypedData for Container {
+///     fn class_name() -> &'static str { "Container" }
+///     fn data_type() -> &'static DataType {
+///         static DT: std::sync::OnceLock<DataType> = std::sync::OnceLock::new();
+///         DT.get_or_init(|| DataTypeBuilder::<Container>::new("Container").mark().size().build_with_callbacks())
+///     }
 /// }
 ///
 /// impl DataTypeFunctions for Container {
 ///     fn mark(&self, marker: &Marker) {
 ///         for item in &self.items {
-///             marker.mark(item);
+///             marker.mark(&**item);
 ///         }
 ///     }
 ///

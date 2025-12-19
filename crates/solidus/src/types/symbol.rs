@@ -15,7 +15,7 @@ use crate::value::{ReprValue, Value, ValueType};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use solidus::types::Symbol;
 ///
 /// let sym = Symbol::new("hello");
@@ -33,8 +33,9 @@ impl Symbol {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use solidus::types::Symbol;
+    /// use solidus::value::ReprValue;
     ///
     /// let sym1 = Symbol::new("foo");
     /// let sym2 = Symbol::new("foo");
