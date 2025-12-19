@@ -14,6 +14,7 @@ Update this file when a phase is completed to avoid requiring full analysis.
 | 4 | [TypedData](docs/plan/phase-4-typed-data.md) | :white_check_mark: Complete | 2025-12-18 |
 | 5 | [Polish](docs/plan/phase-5-polish.md) | :white_check_mark: Complete | 2025-12-19 |
 | 6 | [Safety Validation](docs/plan/phase-6-safety-validation.md) | :hourglass: Pending | |
+| 7 | [Safety Enforcement](docs/plan/phase-7-safety-enforcement.md) | :white_check_mark: Complete | 2025-12-19 |
 
 ## Status Legend
 
@@ -191,6 +192,30 @@ All acceptance criteria met:
 - Test coverage is comprehensive (95 tests pass)
 - CI passes on all platforms (Linux, macOS, Windows)
 - README is complete and accurate
+
+Phase 7 completed with compile-time safety enforcement:
+- **Unsafe Constructors** (Complete):
+  - All VALUE constructors (`RString::new()`, `RArray::new()`, etc.) are now `unsafe`
+  - Forces users to acknowledge safety contract when creating values directly
+- **Safe `_boxed` Variants** (Complete):
+  - `RString::new_boxed()`, `RArray::new_boxed()`, etc. return `BoxValue<T>`
+  - Safe path for heap storage without `unsafe`
+- **Updated `pin_on_stack!` Macro** (Complete):
+  - Handles `unsafe` internally for ergonomic stack pinning
+  - `pin_on_stack!(s = RString::new("hello"))` works without explicit `unsafe`
+- **`ReturnWitness` and `WitnessedReturn` Types** (Complete):
+  - Optional extra safety layer using lifetime witnesses
+  - Prevents storing return values in heap collections
+- **Documentation Updated** (Complete):
+  - All guides updated for new API
+  - All examples updated and working
+
+All acceptance criteria met:
+- `NewValue<T>` cannot be stored in heap collections without unsafe
+- Safe `_boxed` variants provide heap storage path
+- `pin_on_stack!` provides ergonomic stack pinning
+- All tests pass (103 doc tests, full test suite)
+- All examples work with new API
 
 <!-- Add any relevant notes about progress, blockers, or decisions here -->
 

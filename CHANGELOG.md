@@ -9,6 +9,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed - BREAKING
 
+#### Phase 7: Safety Enforcement via Unsafe Constructors (2025-12-19)
+
+This change strengthens the compile-time safety guarantees by making VALUE constructors
+`unsafe`. While `NewValue<T>` enforces that values must be pinned or boxed, it didn't
+prevent users from storing `NewValue<T>` itself in heap collections before pinning.
+
+**What Changed:**
+
+1. **VALUE constructors are now `unsafe`**
+   - `RString::new()` → `unsafe { RString::new() }`
+   - `RArray::new()` → `unsafe { RArray::new() }`
+   - All heap-allocated VALUE creation functions require `unsafe`
+   - This forces users to explicitly acknowledge the safety contract
+
+2. **`pin_on_stack!` macro handles unsafe internally**
+   - `pin_on_stack!(s = RString::new("hello"))` works without explicit `unsafe`
+   - The macro provides the safe, ergonomic path for stack pinning
+
+3. **Safe `_boxed` variants added**
+   - `RString::new_boxed("hello")` → `BoxValue<RString>` (no `unsafe` needed)
+   - `RArray::new_boxed()` → `BoxValue<RArray>` (no `unsafe` needed)
+   - All constructors have safe boxed variants for heap storage
+
+4. **`ReturnWitness` and `WitnessedReturn` types added**
+   - Optional extra safety layer using lifetime witnesses
+   - `WitnessedReturn<'w, T>` cannot outlive the witness scope
+   - Prevents storing return values in heap collections
+
+**Migration Guide:**
+
+Before (Phase 7):
+```rust
+let guard = RString::new("hello");  // Compiled, but guard could be stored in Vec
+pin_on_stack!(s = guard.pin());
+```
+
+After (Phase 7):
+```rust
+// Option 1: Use pin_on_stack! (recommended, no unsafe needed)
+pin_on_stack!(s = RString::new("hello"));
+
+// Option 2: Use _boxed variants for heap storage (no unsafe needed)
+let s = RString::new_boxed("hello");
+
+// Option 3: Explicit unsafe (when you need NewValue directly)
+let guard = unsafe { RString::new("hello") };
+pin_on_stack!(s = guard.pin());
+```
+
+**Why This Change:**
+
+The previous `NewValue<T>` pattern prevented storing the *inner* VALUE on the heap,
+but `NewValue<T>` itself could be stored in a `Vec<NewValue<T>>` before being pinned.
+By making constructors `unsafe`, we force users to either:
+1. Use `pin_on_stack!` (safe, ergonomic)
+2. Use `_boxed` variants (safe, for heap storage)
+3. Explicitly opt into unsafe (advanced use cases)
+
 #### ADR-007: Pinned-From-Creation (2025-12-17)
 
 This is a **major breaking change** that fundamentally changes how Ruby values are
