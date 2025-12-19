@@ -46,27 +46,45 @@ The fundamental issue is that VALUE wrapper types in Magnus implement `Copy`, al
 
 Solidus enforces safety at **compile time** through three mechanisms:
 
-### 1. All VALUE Types are `!Copy`
+### 1. Constructors are `unsafe`
+
+Value constructors are marked `unsafe` to prevent accidental storage in collections:
+
+```rust
+// This requires unsafe - makes you think about what you're doing
+let s = unsafe { RString::new("hello") };
+
+// Can't accidentally put it in a Vec without explicit unsafe
+let vec = vec![s];  // ERROR: RString is !Copy
+```
+
+The `unsafe` requirement ensures you consciously acknowledge the safety requirements
+when creating Ruby values.
+
+### 2. Safe Paths via `pin_on_stack!` and `_boxed` Variants
+
+Solidus provides safe paths that handle the unsafe code internally:
+
+```rust
+// PREFERRED: pin_on_stack! handles unsafe internally
+pin_on_stack!(s = RString::new("hello"));
+// s is Pin<&StackPinned<RString>>, safe to use
+
+// For heap storage, use the safe _boxed variants
+let boxed = RString::new_boxed("hello");  // Returns BoxValue<RString>
+let mut vec = vec![boxed];  // Safe!
+```
+
+### 3. All VALUE Types are `!Copy`
 
 Solidus VALUE wrapper types (`RString`, `RArray`, `RHash`, etc.) do not implement `Copy`. This prevents accidental duplication to heap storage:
 
 ```rust
-let s = RString::new("hello");
+let s = unsafe { RString::new("hello") };
 let vec = vec![s];  // ERROR: RString is !Copy
 ```
 
-### 2. Creation Returns `NewValue<T>`
-
-When you create a Ruby value, you get a `NewValue<T>` that **must** be either pinned on the stack or explicitly boxed. The `#[must_use]` attribute warns if you forget:
-
-```rust
-let guard = RString::new("hello");
-// WARNING if you don't pin or box this!
-```
-
-`NewValue` is itself `!Unpin`, so it can't be stored in collections either.
-
-### 3. Methods Use `&self`
+### 4. Methods Use `&self`
 
 All methods on VALUE types take `&self`, not `self`. This prevents moves of `!Copy` types during method calls:
 
@@ -79,17 +97,16 @@ impl RString {
 
 ## Stack Pinning with `pin_on_stack!`
 
-For most use cases, you want to pin values on the stack. This is fast (no allocation) and keeps the VALUE visible to the GC:
+For most use cases, you want to pin values on the stack. The `pin_on_stack!` macro
+is the **preferred way** to create Ruby values because it handles the unsafe code
+internally:
 
 ```rust
 use solidus::prelude::*;
 
-// Create a value - returns NewValue<RString>
-let guard = RString::new("hello");
-
-// Pin it on the stack
-pin_on_stack!(s = guard);
-// s is now Pin<&StackPinned<RString>>
+// PREFERRED: One-shot creation and pinning (no unsafe needed!)
+pin_on_stack!(s = RString::new("hello"));
+// s is Pin<&StackPinned<RString>>
 
 // Use the value through the pinned reference
 let len = s.get().len();
@@ -98,20 +115,19 @@ let content = s.get().to_string()?;
 
 The `pin_on_stack!` macro:
 
-1. Consumes the `NewValue`
+1. Creates the value using the unsafe constructor internally
 2. Wraps the value in `StackPinned<T>` (which is `!Unpin`)
 3. Creates a `Pin<&StackPinned<T>>` reference
 
 Once pinned, the value cannot be moved to the heap.
 
-### One-Shot Pinning
+### Why This is Safe
 
-You can combine creation and pinning in one statement:
+The `pin_on_stack!` macro is safe because:
 
-```rust
-pin_on_stack!(s = RString::new("hello"));
-// s is immediately Pin<&StackPinned<RString>>
-```
+1. The value is created and immediately pinned on the stack
+2. The `Pin<&StackPinned<T>>` reference cannot be moved to the heap
+3. The value remains visible to Ruby's GC throughout its lifetime
 
 ### Accessing Pinned Values
 
@@ -134,18 +150,15 @@ pin_on_stack!(mut s = RString::new("hello"));
 let inner: &mut RString = s.get_mut();
 ```
 
-## Heap Allocation with `BoxValue<T>`
+## Heap Allocation with Safe `_boxed` Variants
 
-Sometimes you genuinely need to store Ruby values on the heap - in a `Vec`, `HashMap`, or across async boundaries. Solidus provides `BoxValue<T>` for this:
+Sometimes you genuinely need to store Ruby values on the heap - in a `Vec`, `HashMap`, or across async boundaries. Solidus provides **safe `_boxed` constructor variants** for this:
 
 ```rust
 use solidus::prelude::*;
 
-// Create a value
-let guard = RString::new("hello");
-
-// Box it for heap storage
-let boxed = guard.into_box();
+// Safe heap storage - no unsafe needed!
+let boxed = RString::new_boxed("hello");  // Returns BoxValue<RString>
 
 // Now it's safe to store in collections
 let mut strings: Vec<BoxValue<RString>> = Vec::new();
@@ -154,7 +167,7 @@ strings.push(boxed);
 
 ### How BoxValue Works
 
-When you call `.into_box()`:
+When you use a `_boxed` variant (like `RString::new_boxed()`):
 
 1. The value is allocated on the heap
 2. `rb_gc_register_address()` is called to tell Ruby's GC about the heap location
@@ -173,7 +186,7 @@ When the `BoxValue` is dropped:
 - GC registration/unregistration
 - Indirect access through a pointer
 
-Prefer `pin_on_stack!` when possible. Use `BoxValue` only when you need heap storage.
+Prefer `pin_on_stack!` when possible. Use `_boxed` variants only when you need heap storage.
 
 ## When to Use Each Approach
 
@@ -188,11 +201,12 @@ Prefer `pin_on_stack!` when possible. Use `BoxValue` only when you need heap sto
 fn process_string(input: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let content = input.get().to_string()?;
     let processed = content.to_uppercase();
-    Ok(RString::new(&processed))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&processed) })
 }
 ```
 
-### Use `BoxValue<T>` When:
+### Use `_boxed` Variants When:
 
 - Storing values in collections (`Vec`, `HashMap`, etc.)
 - Keeping values alive across async boundaries
@@ -205,9 +219,23 @@ struct Cache {
 }
 
 impl Cache {
-    fn add(&mut self, s: Pin<&StackPinned<RString>>) {
-        self.strings.push(BoxValue::new(s.get().clone()));
+    fn add(&mut self, content: &str) {
+        // Safe! No unsafe needed
+        self.strings.push(RString::new_boxed(content));
     }
+}
+```
+
+### Use Raw `unsafe` Constructors When:
+
+- Returning values immediately to Ruby from methods
+- You need fine-grained control over value creation
+- Performance-critical code where you've verified safety
+
+```rust
+fn greet() -> Result<NewValue<RString>, Error> {
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello!") })
 }
 ```
 
@@ -226,7 +254,8 @@ fn concat(
 ) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 }
 ```
 
@@ -248,16 +277,17 @@ fn add(a: Fixnum, b: Fixnum) -> i64 {
 
 ### Return Values
 
-Return `NewValue<T>` for new Ruby objects or immediate types for simple values:
+Return `NewValue<T>` for new Ruby objects:
 
 ```rust
 // Return a new Ruby string
 fn create_greeting(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let n = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", n)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", n)) })
 }
 
-// Return an immediate value
+// Return an immediate value (no NewValue wrapper needed)
 fn compute_sum(a: Fixnum, b: Fixnum) -> i64 {
     a.to_i64() + b.to_i64()
 }
@@ -267,9 +297,10 @@ fn compute_sum(a: Fixnum, b: Fixnum) -> i64 {
 
 | Mechanism | Purpose | When to Use |
 |-----------|---------|-------------|
+| `unsafe` constructors | Force acknowledgment of safety requirements | Method return values, advanced use |
+| `pin_on_stack!` | Safe stack storage (handles unsafe internally) | **Most cases** - local processing |
+| `_boxed` variants | Safe heap storage | Collections, caching, TypedData |
 | `!Copy` types | Prevent accidental heap moves | Automatic - all VALUE types |
-| `NewValue<T>` | Force explicit storage choice | Returned from constructors |
-| `pin_on_stack!` | Fast stack storage | Most cases |
-| `BoxValue<T>` | Safe heap storage | Collections, caching |
+| `NewValue<T>` | Mark values returned to Ruby | Method return types |
 
-Solidus shifts the burden from "remember the rules" to "the compiler enforces the rules". If your code compiles, it's safe from GC-related undefined behavior.
+Solidus shifts the burden from "remember the rules" to "the compiler enforces the rules". The safe paths (`pin_on_stack!` and `_boxed` variants) make correct code easy to write, while `unsafe` constructors are available when you need more control.

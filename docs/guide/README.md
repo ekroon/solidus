@@ -29,7 +29,8 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 impl MyClass {
     fn greet(&self, name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
         let name_str = name.get().to_string()?;
-        Ok(RString::new(&format!("Hello, {}!", name_str)))
+        // SAFETY: Value is immediately returned to Ruby
+        Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
     }
 }
 ```

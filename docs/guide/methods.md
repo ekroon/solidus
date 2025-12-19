@@ -64,7 +64,8 @@ use std::pin::Pin;
 fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 }
 
 // Register the method
@@ -108,7 +109,8 @@ function!(function_name, arity)
 use solidus::prelude::*;
 
 fn greet() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello, World!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello, World!") })
 }
 
 // Register as a global function
@@ -123,7 +125,69 @@ use std::pin::Pin;
 
 fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
-    Ok(RString::new(&input.to_uppercase()))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&input.to_uppercase()) })
+}
+
+// Register as a module function
+rmodule.define_module_function("to_upper", function!(to_upper, 1), 1)?;
+```
+
+### Example: Arity 2 (self + two arguments)
+
+```rust
+fn multiply_three(
+    rb_self: RString,
+    arg1: Pin<&StackPinned<RString>>,
+    arg2: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
+    let a = rb_self.to_string()?.parse::<i64>()
+        .map_err(|_| Error::argument("first argument must be a number"))?;
+    let b = arg1.get().to_string()?.parse::<i64>()
+        .map_err(|_| Error::argument("second argument must be a number"))?;
+    let c = arg2.get().to_string()?.parse::<i64>()
+        .map_err(|_| Error::argument("third argument must be a number"))?;
+    Ok(a * b * c)
+}
+
+rclass.define_method("multiply_three", method!(multiply_three, 2), 2)?;
+```
+
+## The `function!` Macro
+
+The `function!` macro wraps a Rust function as a Ruby function (no `self` parameter).
+Use this for global functions, module functions, and class methods (singleton methods).
+
+### Basic Syntax
+
+```rust
+function!(function_name, arity)
+```
+
+### Example: Arity 0 (no arguments)
+
+```rust
+use solidus::prelude::*;
+
+fn greet() -> Result<NewValue<RString>, Error> {
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello, World!") })
+}
+
+// Register as a global function
+ruby.define_global_function("greet", function!(greet, 0), 0)?;
+```
+
+### Example: Arity 1
+
+```rust
+use solidus::prelude::*;
+use std::pin::Pin;
+
+fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+    let input = s.get().to_string()?;
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&input.to_uppercase()) })
 }
 
 // Register as a module function
@@ -162,7 +226,8 @@ use std::pin::Pin;
 fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 }
 
 // Register using the generated module
@@ -182,7 +247,8 @@ use std::pin::Pin;
 #[solidus::function]
 fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
 }
 
 // Register using the generated module
@@ -242,7 +308,8 @@ For Ruby VALUE types (RString, RArray, RHash, etc.), use `Pin<&StackPinned<T>>`:
 fn example(arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     // Access the inner value with .get()
     let s = arg.get().to_string()?;
-    Ok(RString::new(&format!("Got: {}", s)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Got: {}", s)) })
 }
 ```
 
@@ -267,7 +334,8 @@ automatically converts Ruby VALUES to these types via `TryConvert`:
 #[solidus::method]
 fn repeat(rb_self: RString, count: i64) -> Result<NewValue<RString>, Error> {
     let s = rb_self.to_string()?;
-    Ok(RString::new(&s.repeat(count as usize)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&s.repeat(count as usize)) })
 }
 ```
 
@@ -306,7 +374,8 @@ Methods must return `Result<T, Error>` where `T` implements `IntoValue`:
 ```rust
 // Return a Ruby string
 fn example() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("hello"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("hello") })
 }
 
 // Return a Rust integer (converts to Ruby Fixnum/Bignum)
@@ -473,17 +542,20 @@ use std::pin::Pin;
 // Instance method
 fn greet(rb_self: RString) -> Result<NewValue<RString>, Error> {
     let name = rb_self.to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", name)) })
 }
 
 // Class method
 fn create_default() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("default"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("default") })
 }
 
 // Global function
 fn hello() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello from Solidus!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello from Solidus!") })
 }
 
 #[solidus::init]

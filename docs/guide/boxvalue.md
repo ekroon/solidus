@@ -22,8 +22,8 @@ it creates a problem for Rust:
 ```rust
 // DANGER: This pattern is unsafe in Ruby extensions!
 let strings: Vec<RString> = vec![
-    RString::new("hello"),
-    RString::new("world"),
+    unsafe { RString::new("hello") },
+    unsafe { RString::new("world") },
 ];
 // The Vec's heap allocation is NOT on the stack
 // Ruby's GC cannot see these strings
@@ -39,14 +39,14 @@ or security vulnerabilities.
 
 ## How BoxValue Solves It
 
-`BoxValue<T>` solves this by explicitly registering the VALUE's location with Ruby's GC:
+`BoxValue<T>` solves this by explicitly registering the VALUE's location with Ruby's GC.
+The easiest way to create a `BoxValue` is using the safe `_boxed` constructor variants:
 
 ```rust
-use solidus::{BoxValue, RString, pin_on_stack};
+use solidus::{BoxValue, RString};
 
-// Create a value and convert it to BoxValue
-pin_on_stack!(s = RString::new("hello"));
-let boxed = BoxValue::new(s.get().clone());
+// Safe! No unsafe needed - use the _boxed variant
+let boxed = RString::new_boxed("hello");
 
 // Now it's safe to store in a Vec
 let mut strings: Vec<BoxValue<RString>> = Vec::new();
@@ -62,33 +62,34 @@ Under the hood, `BoxValue`:
 This is the same mechanism Ruby's C API provides for storing VALUES in global or 
 heap-allocated C variables.
 
-## Creating BoxValue from NewValue
+## Creating BoxValue
 
-When you create a new Ruby value (e.g., `RString::new()`), it returns a `NewValue<T>`. 
-You can convert this directly to a `BoxValue<T>` using `.into_box()`:
+### Using Safe `_boxed` Variants (Preferred)
+
+The easiest and safest way to create a `BoxValue` is using the `_boxed` constructor variants:
 
 ```rust
-use solidus::{BoxValue, RString};
+use solidus::{BoxValue, RString, RArray};
 
-// Create and immediately box
-let guard = RString::new("hello");
-let boxed: BoxValue<RString> = guard.into_box();
+// Create strings for heap storage
+let s = RString::new_boxed("hello");  // Returns BoxValue<RString>
 
-// Now boxed can be stored anywhere
+// Create arrays for heap storage
+let arr = RArray::new_boxed();  // Returns BoxValue<RArray>
+
+// Now they can be stored anywhere
+let mut strings: Vec<BoxValue<RString>> = vec![s];
 ```
 
-This is more efficient than first pinning on the stack and then boxing, as it avoids 
-the intermediate step:
+### From Pinned Values
+
+If you already have a pinned value, you can clone it into a `BoxValue`:
 
 ```rust
 use solidus::{BoxValue, RString, pin_on_stack};
 
-// Less efficient: pin then clone into box
 pin_on_stack!(s = RString::new("hello"));
 let boxed = BoxValue::new(s.get().clone());
-
-// More efficient: direct conversion
-let boxed = RString::new("world").into_box();
 ```
 
 ## Using BoxValue in Collections
@@ -102,9 +103,9 @@ use solidus::{BoxValue, RString};
 
 let mut strings: Vec<BoxValue<RString>> = Vec::new();
 
-// Add values
-strings.push(RString::new("first").into_box());
-strings.push(RString::new("second").into_box());
+// Add values using the safe _boxed variants
+strings.push(RString::new_boxed("first"));
+strings.push(RString::new_boxed("second"));
 
 // Access values
 for s in &strings {
@@ -118,10 +119,10 @@ for s in &strings {
 use solidus::{BoxValue, RString, Value};
 use std::collections::HashMap;
 
-let mut cache: HashMap<String, BoxValue<Value>> = HashMap::new();
+let mut cache: HashMap<String, BoxValue<RString>> = HashMap::new();
 
-cache.insert("key1".to_string(), RString::new("value1").into_box().into());
-cache.insert("key2".to_string(), RString::new("value2").into_box().into());
+cache.insert("key1".to_string(), RString::new_boxed("value1"));
+cache.insert("key2".to_string(), RString::new_boxed("value2"));
 ```
 
 ### In TypedData Structs
@@ -170,7 +171,7 @@ inner value's methods:
 ```rust
 use solidus::{BoxValue, RString};
 
-let boxed = RString::new("hello").into_box();
+let boxed = RString::new_boxed("hello");
 
 // Call methods directly through Deref
 let len = boxed.len();  // Calls RString::len()
@@ -185,7 +186,7 @@ let inner: &RString = &*boxed;
 Use `.get()` to get a clone of the inner value:
 
 ```rust
-let boxed = RString::new("hello").into_box();
+let boxed = RString::new_boxed("hello");
 let cloned: RString = boxed.get();  // Returns a clone
 ```
 
@@ -194,7 +195,7 @@ let cloned: RString = boxed.get();  // Returns a clone
 Use `.into_inner()` to consume the `BoxValue` and get the inner value:
 
 ```rust
-let boxed = RString::new("hello").into_box();
+let boxed = RString::new_boxed("hello");
 let inner: RString = boxed.into_inner();
 // boxed is consumed; inner is no longer GC-protected
 // You must ensure inner stays on the stack or re-register it
@@ -209,7 +210,7 @@ from GC. You should immediately pin it on the stack or wrap it in another `BoxVa
 |----------|-----|
 | Temporary value in a function | `pin_on_stack!` |
 | Passing value to another function | `Pin<&StackPinned<T>>` |
-| Storing in a collection | `BoxValue<T>` |
+| Storing in a collection | `_boxed` variants or `BoxValue<T>` |
 | Field in a TypedData struct | `BoxValue<T>` |
 | Returning from a function | `NewValue<T>` (caller decides) |
 | Global/static storage | `BoxValue<T>` or `gc::register_mark_object` |
@@ -222,6 +223,7 @@ Most Ruby values should be stack-pinned. This is the default and most efficient 
 use solidus::{RString, pin_on_stack};
 
 fn process_string() {
+    // pin_on_stack! handles the unsafe constructor internally
     pin_on_stack!(s = RString::new("hello"));
     // Use s within this function
     // When the function returns, s is automatically cleaned up
@@ -241,8 +243,9 @@ struct MyProcessor {
 }
 
 impl MyProcessor {
-    fn cache(&mut self, value: BoxValue<RString>) {
-        self.cached_values.push(value);
+    fn cache(&mut self, content: &str) {
+        // Safe! Use the _boxed variant
+        self.cached_values.push(RString::new_boxed(content));
     }
 }
 ```
@@ -270,7 +273,7 @@ for i in 0..1000 {
 
 // Avoid: Boxing in a hot loop when not needed
 for i in 0..1000 {
-    let boxed = RString::new(&format!("item_{}", i)).into_box();
+    let boxed = RString::new_boxed(&format!("item_{}", i));
     process_boxed(&boxed);
     // Extra heap allocation and GC registration per iteration
 }
@@ -287,7 +290,7 @@ for i in 0..1000 {
 
 - **Problem**: Ruby's GC only scans the stack; heap-stored VALUES can be collected
 - **Solution**: `BoxValue<T>` registers VALUES with Ruby's GC
-- **Creation**: Use `guard.into_box()` or `BoxValue::new(value)`
+- **Creation**: Use safe `_boxed` variants like `RString::new_boxed()` (preferred)
 - **Access**: Use `Deref`/`DerefMut` or `.get()`/`.into_inner()`
 - **Collections**: `Vec<BoxValue<T>>`, `HashMap<K, BoxValue<T>>`, etc.
 - **Performance**: Prefer stack pinning; use `BoxValue` only when needed

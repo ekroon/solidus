@@ -50,18 +50,19 @@ They must be either stack-pinned or explicitly boxed to prevent GC issues.
 | Class | Ruby class objects | `RClass` |
 | Module | Ruby module objects | `RModule` |
 
-Heap types return `NewValue<T>` from constructors, enforcing proper handling:
+Heap types require `unsafe` for direct construction, but `pin_on_stack!` provides
+a safe path that handles the unsafe code internally:
 
 ```rust
 use solidus::types::RString;
 use solidus::pin_on_stack;
 
-// Creating a string returns NewValue<RString>
-let guard = RString::new("hello");
-
-// Pin on stack for local use
-pin_on_stack!(s = guard);
+// PREFERRED: pin_on_stack! handles unsafe internally
+pin_on_stack!(s = RString::new("hello"));
 println!("Length: {}", s.get().len());
+
+// For heap storage, use the safe _boxed variants
+let boxed = RString::new_boxed("world");  // Returns BoxValue<RString>
 ```
 
 ## Immediate Types
@@ -170,7 +171,7 @@ Ruby strings are mutable byte sequences with encoding support:
 use solidus::types::{RString, Encoding};
 use solidus::pin_on_stack;
 
-// Create from &str
+// PREFERRED: Create using pin_on_stack! (handles unsafe internally)
 pin_on_stack!(s = RString::new("Hello, world!"));
 
 // Basic operations
@@ -228,7 +229,7 @@ use solidus::types::RArray;
 use solidus::pin_on_stack;
 use solidus::convert::TryConvert;
 
-// Create empty array
+// PREFERRED: Create using pin_on_stack! (handles unsafe internally)
 pin_on_stack!(arr = RArray::new());
 
 // Create with capacity (performance optimization)
@@ -289,7 +290,7 @@ use solidus::types::{RHash, Symbol};
 use solidus::pin_on_stack;
 use solidus::convert::TryConvert;
 
-// Create empty hash
+// PREFERRED: Create using pin_on_stack! (handles unsafe internally)
 pin_on_stack!(hash = RHash::new());
 
 // Insert with string keys
@@ -417,9 +418,9 @@ let str_val = "hello".into_value();
 let vec_val = vec![1i64, 2, 3].into_value();
 let map_val = HashMap::from([("a", 1)]).into_value();
 
-// Ruby types
-let rstr = RString::new("hello");
-let val = rstr.into_value();
+// Ruby types - use unsafe or pin_on_stack!
+pin_on_stack!(rstr = RString::new("hello"));
+let val = rstr.get().as_value();
 ```
 
 ### Supported Conversions
@@ -515,12 +516,19 @@ let len = rstring.len();
 ### 4. Pin Heap Values Correctly
 
 ```rust
-// Good: Pin for local use
+// Good: Pin for local use (preferred - no unsafe needed)
 pin_on_stack!(s = RString::new("hello"));
 let len = s.get().len();
 
-// Good: Convert immediately if just passing to Ruby
-let val = RString::new("hello").into_value();
+// Good: Use _boxed variants for heap storage
+let boxed = RString::new_boxed("hello");
+let mut vec = vec![boxed];
+
+// For method returns, use unsafe with safety comment
+fn greet() -> Result<NewValue<RString>, Error> {
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("hello") })
+}
 ```
 
 ## Further Reading

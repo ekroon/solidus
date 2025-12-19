@@ -306,11 +306,12 @@ fn create_greeting(
     let validated_age = validate_age(age)?;
     
     // Create the greeting
-    Ok(RString::new(&format!(
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!(
         "Hello, {}! You are {} years old.",
         validated_name,
         validated_age
-    )))
+    )) })
 }
 ```
 

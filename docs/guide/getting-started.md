@@ -65,7 +65,8 @@ use solidus::prelude::*;
 
 /// A simple function that returns a greeting.
 fn hello() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello from Solidus!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello from Solidus!") })
 }
 
 /// Initialize the extension and register our function.
@@ -138,7 +139,8 @@ use std::pin::Pin;
 /// Arguments use Pin<&StackPinned<T>> for GC safety.
 fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
 }
 
 /// Adds two numbers (passed as strings).
@@ -189,12 +191,14 @@ fn string_concat(
 ) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 }
 
 /// Class method: creates a greeting.
 fn create_greeting() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello!") })
 }
 
 #[solidus::init]
@@ -257,7 +261,8 @@ use std::pin::Pin;
 #[solidus_macros::function]
 fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
 }
 
 #[solidus::init]
@@ -283,7 +288,8 @@ fn might_fail(should_fail: bool) -> Result<NewValue<RString>, Error> {
     if should_fail {
         Err(Error::runtime("Something went wrong!"))
     } else {
-        Ok(RString::new("Success!"))
+        // SAFETY: Value is immediately returned to Ruby
+        Ok(unsafe { RString::new("Success!") })
     }
 }
 ```
