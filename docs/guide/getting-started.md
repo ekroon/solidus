@@ -64,7 +64,7 @@ Replace the contents of `src/lib.rs` with:
 use solidus::prelude::*;
 
 /// A simple function that returns a greeting.
-fn hello() -> Result<PinGuard<RString>, Error> {
+fn hello() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello from Solidus!"))
 }
 
@@ -136,7 +136,7 @@ use std::pin::Pin;
 
 /// Greets a person by name.
 /// Arguments use Pin<&StackPinned<T>> for GC safety.
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name_str)))
 }
@@ -164,7 +164,7 @@ Key points:
 - `Pin<&StackPinned<RString>>` is the signature for Ruby VALUE arguments
 - Use `.get()` to access the inner value from a pinned reference
 - The `function!` macro handles all the pinning automatically
-- Return types can be Ruby values (`PinGuard<T>`) or Rust primitives (`i64`)
+- Return types can be Ruby values (`NewValue<T>`) or Rust primitives (`i64`)
 
 ## Defining Classes and Methods
 
@@ -186,14 +186,14 @@ fn string_length(rb_self: RString) -> Result<i64, Error> {
 fn string_concat(
     rb_self: RString,
     other: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
 }
 
 /// Class method: creates a greeting.
-fn create_greeting() -> Result<PinGuard<RString>, Error> {
+fn create_greeting() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello!"))
 }
 
@@ -255,7 +255,7 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 #[solidus_macros::function]
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name_str)))
 }
@@ -279,7 +279,7 @@ Solidus propagates errors as Ruby exceptions:
 ```rust
 use solidus::prelude::*;
 
-fn might_fail(should_fail: bool) -> Result<PinGuard<RString>, Error> {
+fn might_fail(should_fail: bool) -> Result<NewValue<RString>, Error> {
     if should_fail {
         Err(Error::runtime("Something went wrong!"))
     } else {

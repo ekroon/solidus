@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{PinGuard, ReprValue, Value};
+use crate::value::{NewValue, ReprValue, Value};
 
 /// Small integer that fits in a VALUE (immediate value).
 ///
@@ -304,16 +304,16 @@ impl RBignum {
     /// In practice, most i64 values will fit in a Fixnum, so this will often
     /// return None.
     ///
-    /// Returns a `PinGuard<RBignum>` that must be pinned on the stack
+    /// Returns a `NewValue<RBignum>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
-    pub fn from_i64(n: i64) -> Option<PinGuard<Self>> {
+    pub fn from_i64(n: i64) -> Option<NewValue<Self>> {
         // SAFETY: rb_ll2inum creates a Ruby integer (Fixnum or Bignum)
         let val = unsafe { rb_sys::rb_ll2inum(n as ::std::os::raw::c_longlong) };
         let val = unsafe { Value::from_raw(val) };
 
         // Check if it's actually a Bignum
         if val.rb_type() == crate::value::ValueType::Bignum {
-            Some(PinGuard::new(RBignum(val)))
+            Some(NewValue::new(RBignum(val)))
         } else {
             None
         }
@@ -325,16 +325,16 @@ impl RBignum {
     /// if the value fits, or a Bignum if it doesn't. Returns None if the
     /// result is not a Bignum.
     ///
-    /// Returns a `PinGuard<RBignum>` that must be pinned on the stack
+    /// Returns a `NewValue<RBignum>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
-    pub fn from_u64(n: u64) -> Option<PinGuard<Self>> {
+    pub fn from_u64(n: u64) -> Option<NewValue<Self>> {
         // SAFETY: rb_ull2inum creates a Ruby integer (Fixnum or Bignum)
         let val = unsafe { rb_sys::rb_ull2inum(n as ::std::os::raw::c_ulonglong) };
         let val = unsafe { Value::from_raw(val) };
 
         // Check if it's actually a Bignum
         if val.rb_type() == crate::value::ValueType::Bignum {
-            Some(PinGuard::new(RBignum(val)))
+            Some(NewValue::new(RBignum(val)))
         } else {
             None
         }

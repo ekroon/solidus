@@ -55,16 +55,16 @@ let s = RString::new("hello");
 let vec = vec![s];  // ERROR: RString is !Copy
 ```
 
-### 2. Creation Returns `PinGuard<T>`
+### 2. Creation Returns `NewValue<T>`
 
-When you create a Ruby value, you get a `PinGuard<T>` that **must** be either pinned on the stack or explicitly boxed. The `#[must_use]` attribute warns if you forget:
+When you create a Ruby value, you get a `NewValue<T>` that **must** be either pinned on the stack or explicitly boxed. The `#[must_use]` attribute warns if you forget:
 
 ```rust
 let guard = RString::new("hello");
 // WARNING if you don't pin or box this!
 ```
 
-`PinGuard` is itself `!Unpin`, so it can't be stored in collections either.
+`NewValue` is itself `!Unpin`, so it can't be stored in collections either.
 
 ### 3. Methods Use `&self`
 
@@ -84,7 +84,7 @@ For most use cases, you want to pin values on the stack. This is fast (no alloca
 ```rust
 use solidus::prelude::*;
 
-// Create a value - returns PinGuard<RString>
+// Create a value - returns NewValue<RString>
 let guard = RString::new("hello");
 
 // Pin it on the stack
@@ -98,7 +98,7 @@ let content = s.get().to_string()?;
 
 The `pin_on_stack!` macro:
 
-1. Consumes the `PinGuard`
+1. Consumes the `NewValue`
 2. Wraps the value in `StackPinned<T>` (which is `!Unpin`)
 3. Creates a `Pin<&StackPinned<T>>` reference
 
@@ -185,7 +185,7 @@ Prefer `pin_on_stack!` when possible. Use `BoxValue` only when you need heap sto
 - Most common case
 
 ```rust
-fn process_string(input: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn process_string(input: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let content = input.get().to_string()?;
     let processed = content.to_uppercase();
     Ok(RString::new(&processed))
@@ -223,7 +223,7 @@ For Ruby objects that need GC protection:
 fn concat(
     rb_self: RString,
     other: Pin<&StackPinned<RString>>
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
@@ -248,11 +248,11 @@ fn add(a: Fixnum, b: Fixnum) -> i64 {
 
 ### Return Values
 
-Return `PinGuard<T>` for new Ruby objects or immediate types for simple values:
+Return `NewValue<T>` for new Ruby objects or immediate types for simple values:
 
 ```rust
 // Return a new Ruby string
-fn create_greeting(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn create_greeting(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let n = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", n)))
 }
@@ -268,7 +268,7 @@ fn compute_sum(a: Fixnum, b: Fixnum) -> i64 {
 | Mechanism | Purpose | When to Use |
 |-----------|---------|-------------|
 | `!Copy` types | Prevent accidental heap moves | Automatic - all VALUE types |
-| `PinGuard<T>` | Force explicit storage choice | Returned from constructors |
+| `NewValue<T>` | Force explicit storage choice | Returned from constructors |
 | `pin_on_stack!` | Fast stack storage | Most cases |
 | `BoxValue<T>` | Safe heap storage | Collections, caching |
 

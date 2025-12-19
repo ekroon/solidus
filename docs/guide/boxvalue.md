@@ -62,9 +62,9 @@ Under the hood, `BoxValue`:
 This is the same mechanism Ruby's C API provides for storing VALUES in global or 
 heap-allocated C variables.
 
-## Creating BoxValue from PinGuard
+## Creating BoxValue from NewValue
 
-When you create a new Ruby value (e.g., `RString::new()`), it returns a `PinGuard<T>`. 
+When you create a new Ruby value (e.g., `RString::new()`), it returns a `NewValue<T>`. 
 You can convert this directly to a `BoxValue<T>` using `.into_box()`:
 
 ```rust
@@ -211,7 +211,7 @@ from GC. You should immediately pin it on the stack or wrap it in another `BoxVa
 | Passing value to another function | `Pin<&StackPinned<T>>` |
 | Storing in a collection | `BoxValue<T>` |
 | Field in a TypedData struct | `BoxValue<T>` |
-| Returning from a function | `PinGuard<T>` (caller decides) |
+| Returning from a function | `NewValue<T>` (caller decides) |
 | Global/static storage | `BoxValue<T>` or `gc::register_mark_object` |
 
 ### Stack Pinning (Common Case)

@@ -8,7 +8,7 @@ or explicitly boxed for the heap from the moment they're created, enforced at co
 
 ## Design Principles
 
-1. **Safety by default**: All VALUE types are `!Copy`. Creation returns `PinGuard<T>` that
+1. **Safety by default**: All VALUE types are `!Copy`. Creation returns `NewValue<T>` that
    must be pinned on stack or boxed for heap. Compiler enforces what Magnus only documents.
 
 2. **Explicit heap allocation**: When heap storage is needed, users explicitly use `BoxValue<T>`,
@@ -110,7 +110,7 @@ this check.
 | Type | Purpose |
 |------|---------|
 | `Value` | Raw Ruby VALUE wrapper (`!Copy`) |
-| `PinGuard<T>` | Guard requiring pinning or boxing of new values |
+| `NewValue<T>` | Guard requiring pinning or boxing of new values |
 | `StackPinned<T>` | `!Unpin` wrapper for stack pinning |
 | `BoxValue<T>` | Heap-allocated, GC-registered wrapper |
 | `Ruby` | Handle to Ruby API (not `Copy`, passed by reference) |
@@ -119,7 +119,7 @@ this check.
 ## Method Signature Patterns
 
 ```rust
-// Creating values - always returns PinGuard
+// Creating values - always returns NewValue
 let guard = RString::new("hello");
 
 // Option 1: Pin on stack (common case)
@@ -132,16 +132,16 @@ let boxed = guard.into_box();
 let mut values = vec![boxed];  // Safe!
 
 // Method with pinned argument
-fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
+fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
 
 // Method with immediate value (no pinning needed)  
-fn example(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error>
+fn example(rb_self: RString, count: i64) -> Result<NewValue<RString>, Error>
 
 // Method with mixed arguments
-fn example(rb_self: RString, count: i64, arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
+fn example(rb_self: RString, count: i64, arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
 
 // Function (no self)
-fn example(arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
+fn example(arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
 
 // Using &self for methods (all VALUE methods use &self, not self)
 impl RString {

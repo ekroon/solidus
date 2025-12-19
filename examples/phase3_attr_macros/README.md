@@ -12,7 +12,7 @@ wrapper does the pinning work for you:
 ```rust
 // Your function signature uses Pin<&StackPinned<T>>
 #[solidus_macros::method]
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
@@ -97,7 +97,7 @@ the macro generates a hidden module:
 
 ```rust
 // For: #[solidus_macros::function]
-//      fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error>
+//      fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
 
 #[doc(hidden)]
 pub mod __solidus_function_greet {

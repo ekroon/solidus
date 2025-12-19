@@ -388,14 +388,14 @@ fn test_implicit_pinning_wrappers_compile() {
 #[test]
 fn test_method_implicit_pinning_direct_call() {
     // Test that the underlying function can be called directly
-    solidus::pin_on_stack!(other = solidus::value::PinGuard::new(TestValue(5)));
+    solidus::pin_on_stack!(other = solidus::value::NewValue::new(TestValue(5)));
     let result = method_implicit_pinning(TestValue(10), other);
     assert_eq!(result.unwrap(), 15);
 }
 
 #[test]
 fn test_function_implicit_pinning_direct_call() {
-    solidus::pin_on_stack!(arg = solidus::value::PinGuard::new(TestValue(21)));
+    solidus::pin_on_stack!(arg = solidus::value::NewValue::new(TestValue(21)));
     let result = function_implicit_pinning(arg);
     assert_eq!(result.unwrap(), 42);
 }
@@ -403,8 +403,8 @@ fn test_function_implicit_pinning_direct_call() {
 #[test]
 fn test_method_mixed_pinning_direct_call() {
     // Create pinned values for both parameters
-    solidus::pin_on_stack!(explicit_arg = solidus::value::PinGuard::new(TestValue(10)));
-    solidus::pin_on_stack!(implicit_arg = solidus::value::PinGuard::new(TestValue(100)));
+    solidus::pin_on_stack!(explicit_arg = solidus::value::NewValue::new(TestValue(10)));
+    solidus::pin_on_stack!(implicit_arg = solidus::value::NewValue::new(TestValue(100)));
     let result = method_mixed_pinning(TestValue(1), explicit_arg, implicit_arg);
     assert_eq!(result.unwrap(), 111);
 }

@@ -25,7 +25,7 @@ use crate::value::Value;
 /// use solidus::prelude::*;
 /// use solidus::method::ReturnValue;
 ///
-/// fn example() -> Result<PinGuard<RString>, Error> {
+/// fn example() -> Result<NewValue<RString>, Error> {
 ///     Ok(RString::new("hello"))
 /// }
 /// ```

@@ -18,19 +18,19 @@
 //! Solidus enforces safety at compile time through three mechanisms:
 //!
 //! 1. **All VALUE types are `!Copy`** - Prevents accidental duplication to heap
-//! 2. **Creation returns `PinGuard<T>`** - Forces explicit choice of stack or heap storage
+//! 2. **Creation returns `NewValue<T>`** - Forces explicit choice of stack or heap storage
 //! 3. **Methods use `&self`** - Prevents moves of `!Copy` types
 //!
 //! ## Creating Values
 //!
-//! When you create a Ruby value, you get a `PinGuard<T>` that must be either:
+//! When you create a Ruby value, you get a `NewValue<T>` that must be either:
 //! - Pinned on the stack with `.pin()` (common case)
 //! - Boxed for heap storage with `.into_box()` (explicit GC registration)
 //!
 //! ```no_run
 //! use solidus::prelude::*;
 //!
-//! // Creating a value returns a PinGuard
+//! // Creating a value returns a NewValue
 //! let guard = RString::new("hello");
 //!
 //! // Option 1: Pin on stack (fast, common case)
@@ -43,13 +43,13 @@
 //! let mut values = vec![boxed];  // Safe! GC knows about it
 //! ```
 //!
-//! The `#[must_use]` attribute on `PinGuard` means the compiler warns if you
+//! The `#[must_use]` attribute on `NewValue` means the compiler warns if you
 //! forget to pin or box a value.
 //!
 //! # Core Types
 //!
 //! - [`Value`] - Base wrapper around Ruby's VALUE
-//! - [`PinGuard<T>`] - Guard that enforces pinning or boxing of new values
+//! - [`NewValue<T>`] - Guard that enforces pinning or boxing of new values
 //! - [`StackPinned<T>`](value::StackPinned) - `!Unpin` wrapper for stack-pinned values
 //! - [`BoxValue<T>`] - Heap-allocated, GC-registered wrapper
 //! - [`Ruby`] - Handle to the Ruby VM
@@ -64,7 +64,7 @@
 //! use solidus::method;
 //!
 //! // Method that takes pinned arguments
-//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 //!     let self_str = rb_self.to_string()?;
 //!     let other_str = other.get().to_string()?;
 //!     Ok(RString::new(&format!("{}{}", self_str, other_str)))
@@ -115,7 +115,7 @@ pub mod value;
 // Re-exports for convenience
 pub use error::{Error, ExceptionClass};
 pub use ruby::Ruby;
-pub use value::{BoxValue, PinGuard, ReprValue, StackPinned, Value, ValueType};
+pub use value::{BoxValue, NewValue, ReprValue, StackPinned, Value, ValueType};
 
 // Re-export all types
 pub use types::{
@@ -144,7 +144,7 @@ pub mod prelude {
         Encoding, Fixnum, Float, Integer, Module, Qfalse, Qnil, Qtrue, RArray, RBignum, RClass,
         RFloat, RHash, RModule, RString, Symbol,
     };
-    pub use crate::value::{BoxValue, PinGuard, ReprValue, StackPinned, Value, ValueType};
+    pub use crate::value::{BoxValue, NewValue, ReprValue, StackPinned, Value, ValueType};
 
     #[cfg(target_pointer_width = "64")]
     pub use crate::types::Flonum;

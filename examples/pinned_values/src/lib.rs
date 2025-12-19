@@ -32,7 +32,7 @@ use std::pin::Pin;
 /// - It cannot be moved to the heap accidentally
 ///
 /// Use `.get()` to access the inner `&RString`.
-fn process_pinned_string(input: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn process_pinned_string(input: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let content = input.get().to_string()?;
     let processed = content.to_uppercase();
     Ok(RString::new(&format!("Processed: {}", processed)))
@@ -44,7 +44,7 @@ fn process_pinned_string(input: Pin<&StackPinned<RString>>) -> Result<PinGuard<R
 fn concatenate_pinned(
     first: Pin<&StackPinned<RString>>,
     second: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let s1 = first.get().to_string()?;
     let s2 = second.get().to_string()?;
     Ok(RString::new(&format!("{}{}", s1, s2)))
@@ -56,7 +56,7 @@ fn concatenate_pinned(
 fn append_to_self(
     rb_self: RString,
     suffix: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let suffix_str = suffix.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, suffix_str)))
@@ -116,7 +116,7 @@ impl StringCollector {
     }
 
     /// Convert to a Ruby array.
-    fn to_ruby_array(&self) -> Result<PinGuard<RArray>, Error> {
+    fn to_ruby_array(&self) -> Result<NewValue<RArray>, Error> {
         let array = RArray::new();
         for s in &self.strings {
             // Get the RString from BoxValue and push it to the array
@@ -156,7 +156,7 @@ fn get_collector() -> &'static mut StringCollector {
 // ============================================================================
 
 /// Global function: process a string with pinned argument
-fn ruby_process_string(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn ruby_process_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     process_pinned_string(s)
 }
 
@@ -164,15 +164,15 @@ fn ruby_process_string(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString
 fn ruby_concat_strings(
     first: Pin<&StackPinned<RString>>,
     second: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     concatenate_pinned(first, second)
 }
 
 /// Global function: demonstrate boxing a value
-fn ruby_box_string(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn ruby_box_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let boxed = create_boxed_string(s)?;
     // Convert back from BoxValue to return
-    Ok(PinGuard::new(boxed.get()))
+    Ok(NewValue::new(boxed.get()))
 }
 
 /// Global function: add a string to the collector
@@ -188,14 +188,14 @@ fn ruby_collector_count() -> Result<i64, Error> {
 }
 
 /// Global function: join all collected strings
-fn ruby_collector_join(sep: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn ruby_collector_join(sep: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let sep_str = sep.get().to_string()?;
     let joined = get_collector().join(&sep_str)?;
     Ok(RString::new(&joined))
 }
 
 /// Global function: get collected strings as Ruby array
-fn ruby_collector_to_array() -> Result<PinGuard<RArray>, Error> {
+fn ruby_collector_to_array() -> Result<NewValue<RArray>, Error> {
     get_collector().to_ruby_array()
 }
 
@@ -211,7 +211,7 @@ fn ruby_collector_clear() -> Result<i64, Error> {
 ///
 /// This function creates multiple values and shows that they all
 /// remain valid because they're properly pinned on the stack.
-fn ruby_demo_stack_pinning() -> Result<PinGuard<RString>, Error> {
+fn ruby_demo_stack_pinning() -> Result<NewValue<RString>, Error> {
     // Each value is pinned on the stack - GC can see all of them
     pin_on_stack!(s1 = RString::new("Stack"));
     pin_on_stack!(s2 = RString::new("pinning"));
@@ -234,7 +234,7 @@ fn ruby_demo_stack_pinning() -> Result<PinGuard<RString>, Error> {
 }
 
 /// Global function: demonstrate heap boxing for collections
-fn ruby_demo_heap_boxing() -> Result<PinGuard<RArray>, Error> {
+fn ruby_demo_heap_boxing() -> Result<NewValue<RArray>, Error> {
     // Create several BoxValue instances - safe for heap storage
     let mut boxed_values: Vec<BoxValue<RString>> = Vec::new();
 

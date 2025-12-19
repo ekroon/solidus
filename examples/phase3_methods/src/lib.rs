@@ -21,7 +21,7 @@ use std::pin::Pin;
 
 /// Instance method with arity 0 - just self
 /// Returns a greeting message
-fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
+fn greet(rb_self: RString) -> Result<NewValue<RString>, Error> {
     let name = rb_self.to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name)))
 }
@@ -54,7 +54,7 @@ fn multiply_three(
 
 /// Instance method that demonstrates error handling
 /// Returns an error if called
-fn always_fails(_rb_self: RString) -> Result<PinGuard<RString>, Error> {
+fn always_fails(_rb_self: RString) -> Result<NewValue<RString>, Error> {
     Err(Error::runtime("This method always fails!"))
 }
 
@@ -64,13 +64,13 @@ fn always_fails(_rb_self: RString) -> Result<PinGuard<RString>, Error> {
 
 /// Module function with arity 0
 /// Returns a constant string
-fn get_version() -> Result<PinGuard<RString>, Error> {
+fn get_version() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("1.0.0"))
 }
 
 /// Module function with arity 1
 /// Converts a string to uppercase
-fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
     Ok(RString::new(&input.to_uppercase()))
 }
@@ -80,7 +80,7 @@ fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
 fn join_with(
     s1: Pin<&StackPinned<RString>>,
     s2: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let str1 = s1.get().to_string()?;
     let str2 = s2.get().to_string()?;
     Ok(RString::new(&format!("{} - {}", str1, str2)))
@@ -92,7 +92,7 @@ fn join_with(
 
 /// Class method (singleton method) with arity 0
 /// Returns a constant string representation of PI
-fn pi() -> Result<PinGuard<RString>, Error> {
+fn pi() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("3.14159"))
 }
 
@@ -119,13 +119,13 @@ fn power(base: Pin<&StackPinned<RString>>, exponent: Pin<&StackPinned<RString>>)
 // ============================================================================
 
 /// Class method that creates a new Calculator with a default name
-fn create_default() -> Result<PinGuard<RString>, Error> {
+fn create_default() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Calculator"))
 }
 
 /// Class method with arity 1
 /// Creates a Calculator with a custom name
-fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let n = name.get().to_string()?;
     Ok(RString::new(&format!("Calculator: {}", n)))
 }
@@ -136,13 +136,13 @@ fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString
 
 /// Global function with arity 0
 /// Returns a greeting
-fn hello() -> Result<PinGuard<RString>, Error> {
+fn hello() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello from Solidus!"))
 }
 
 /// Global function with arity 1
 /// Repeats a string n times
-fn repeat_string(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn repeat_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
     Ok(RString::new(&input.repeat(3)))
 }
@@ -163,7 +163,7 @@ fn average_three(
     a: Pin<&StackPinned<RString>>,
     b: Pin<&StackPinned<RString>>,
     c: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let num_a = a.get().to_string()?.parse::<f64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
     let num_b = b.get().to_string()?.parse::<f64>()

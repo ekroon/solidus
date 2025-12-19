@@ -33,7 +33,7 @@ For most cases, pin values on the stack where GC can see them:
 ```rust
 use solidus::prelude::*;
 
-// Create a value - returns PinGuard
+// Create a value - returns NewValue
 let guard = RString::new("hello");
 
 // Pin it on the stack
@@ -67,7 +67,7 @@ strings.push(boxed);
 ```rust
 fn process_pinned_string(
     input: Pin<&StackPinned<RString>>
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let content = input.get().to_string()?;
     Ok(RString::new(&content.to_uppercase()))
 }
@@ -79,7 +79,7 @@ fn process_pinned_string(
 fn concatenate_pinned(
     first: Pin<&StackPinned<RString>>,
     second: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let s1 = first.get().to_string()?;
     let s2 = second.get().to_string()?;
     Ok(RString::new(&format!("{}{}", s1, s2)))
@@ -92,7 +92,7 @@ fn concatenate_pinned(
 fn append_to_self(
     rb_self: RString,
     suffix: Pin<&StackPinned<RString>>,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let suffix_str = suffix.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, suffix_str)))
@@ -140,14 +140,14 @@ ruby test.rb
 |-----------|---------|-------------|-------------|
 | `pin_on_stack!` | Stack storage | Fast (no allocation) | Local processing, arguments |
 | `BoxValue<T>` | Heap storage | Slower (GC registration) | Collections, caching |
-| `PinGuard<T>` | Creation guard | Zero-cost | Returned from constructors |
+| `NewValue<T>` | Creation guard | Zero-cost | Returned from constructors |
 
 ## Compile-Time Safety
 
 Solidus enforces these rules at compile time:
 
 1. **`!Copy` types** - Ruby values can't be accidentally copied to heap
-2. **`PinGuard` must-use** - Compiler warns if you don't pin or box
+2. **`NewValue` must-use** - Compiler warns if you don't pin or box
 3. **`!Unpin` wrappers** - Pinned values can't escape their lifetime
 
 If your code compiles, it's safe from GC-related undefined behavior.

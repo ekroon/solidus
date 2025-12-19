@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{PinGuard, ReprValue, Value, ValueType};
+use crate::value::{NewValue, ReprValue, Value, ValueType};
 
 /// Immediate float value (only on 64-bit platforms).
 ///
@@ -108,12 +108,12 @@ impl RFloat {
     /// This always creates a heap-allocated float. On 64-bit platforms,
     /// if the value can be represented as a Flonum, use `Flonum::from_f64` instead.
     ///
-    /// Returns a `PinGuard<RFloat>` that must be pinned on the stack
+    /// Returns a `NewValue<RFloat>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
-    pub fn from_f64(n: f64) -> PinGuard<Self> {
+    pub fn from_f64(n: f64) -> NewValue<Self> {
         // SAFETY: rb_float_new creates a Float VALUE
         let val = unsafe { Value::from_raw(rb_sys::rb_float_new(n)) };
-        PinGuard::new(RFloat(val))
+        NewValue::new(RFloat(val))
     }
 
     /// Get the value as f64.
@@ -190,13 +190,13 @@ impl Float {
             if let Some(flonum) = Flonum::from_f64(n) {
                 Float::Flonum(flonum)
             } else {
-                // SAFETY: We need to unwrap the PinGuard to return Self
+                // SAFETY: We need to unwrap the NewValue to return Self
                 Float::RFloat(unsafe { RFloat::from_f64(n).into_inner() })
             }
         }
         #[cfg(not(target_pointer_width = "64"))]
         {
-            // SAFETY: We need to unwrap the PinGuard to return Self
+            // SAFETY: We need to unwrap the NewValue to return Self
             Float::RFloat(unsafe { RFloat::from_f64(n).into_inner() })
         }
     }

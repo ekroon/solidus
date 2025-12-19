@@ -389,7 +389,7 @@ pub extern "C" fn group_by_length() -> rb_sys::VALUE {
                 Some(existing) => RArray::try_convert(existing)?,
                 None => {
                     // Use RArray::default() to get an RArray directly
-                    // (default() internally creates and unwraps a PinGuard)
+                    // (default() internally creates and unwraps a NewValue)
                     let new_group = RArray::default();
                     grouped.insert(len, new_group.clone());
                     new_group

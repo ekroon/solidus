@@ -9,7 +9,7 @@ use solidus::prelude::*;
 
 /// A simple function that returns a greeting.
 #[solidus_macros::function]
-fn hello() -> Result<PinGuard<RString>, Error> {
+fn hello() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello from Solidus!"))
 }
 

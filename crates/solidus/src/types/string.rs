@@ -4,7 +4,7 @@ use std::ffi::CStr;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{PinGuard, ReprValue, Value};
+use crate::value::{NewValue, ReprValue, Value};
 
 /// Ruby String (heap allocated).
 ///
@@ -30,7 +30,7 @@ pub struct RString(Value);
 impl RString {
     /// Create a new Ruby string from a Rust string slice.
     ///
-    /// Returns a `PinGuard<RString>` that must be pinned on the stack
+    /// Returns a `NewValue<RString>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
     /// # Example
@@ -43,7 +43,7 @@ impl RString {
     /// pin_on_stack!(s = guard);
     /// assert_eq!(s.get().len(), 11);
     /// ```
-    pub fn new(s: &str) -> PinGuard<Self> {
+    pub fn new(s: &str) -> NewValue<Self> {
         Self::from_slice(s.as_bytes())
     }
 
@@ -51,7 +51,7 @@ impl RString {
     ///
     /// The string will be created with binary encoding.
     ///
-    /// Returns a `PinGuard<RString>` that must be pinned on the stack
+    /// Returns a `NewValue<RString>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
     /// # Example
@@ -65,7 +65,7 @@ impl RString {
     /// pin_on_stack!(s = guard);
     /// assert_eq!(s.get().len(), 11);
     /// ```
-    pub fn from_slice(bytes: &[u8]) -> PinGuard<Self> {
+    pub fn from_slice(bytes: &[u8]) -> NewValue<Self> {
         // SAFETY: rb_str_new creates a new Ruby string with the given bytes
         let val = unsafe {
             rb_sys::rb_str_new(
@@ -74,7 +74,7 @@ impl RString {
             )
         };
         // SAFETY: rb_str_new returns a valid VALUE
-        PinGuard::new(RString(unsafe { Value::from_raw(val) }))
+        NewValue::new(RString(unsafe { Value::from_raw(val) }))
     }
 
     /// Get the length of the string in bytes.

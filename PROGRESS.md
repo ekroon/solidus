@@ -62,7 +62,7 @@ Phase 3 completed with comprehensive method registration:
 - Stage 8: Block Arguments (Deferred) - Support for Ruby blocks deferred to future work
 - Stage 9: Keyword Arguments (Deferred) - Support for Ruby keyword arguments deferred to future work
 - Stage 10: Integration and Polish (Complete) - Examples, documentation, and testing complete
-- **Stage 11: ADR-007 Implementation (Complete)** - All VALUE types are `!Copy`, `PinGuard<T>` enforces pinning from creation, methods use `&self` signatures
+- **Stage 11: ADR-007 Implementation (Complete)** - All VALUE types are `!Copy`, `NewValue<T>` enforces pinning from creation, methods use `&self` signatures
 
 All core acceptance criteria met:
 - `method!` and `function!` macros work for arities 0-4 (extensible to 15)
@@ -71,7 +71,7 @@ All core acceptance criteria met:
 - `#[solidus::init]` generates correct init functions
 - Panic handling and error propagation work correctly
 - **All VALUE types are `!Copy` (ADR-007)**: Prevents accidental heap escape
-- **PinGuard pattern enforces safe creation**: All new values must be pinned or boxed
+- **NewValue pattern enforces safe creation**: All new values must be pinned or boxed
 - **Methods use `&self` instead of `self`**: Prevents moves of `!Copy` types
 - Comprehensive test coverage (192+ tests pass with Ruby)
 - Complete phase3_methods example demonstrating all features
@@ -121,7 +121,7 @@ See: https://github.com/matsadler/magnus/issues/101 for background discussion.
 
 Implementation changes:
 1. ✅ All VALUE types (`RString`, `RArray`, etc.) are now `!Copy`
-2. ✅ Creation functions return `PinGuard<T>` that enforces immediate pinning or boxing
+2. ✅ Creation functions return `NewValue<T>` that enforces immediate pinning or boxing
 3. ✅ `BoxValue<T>` is the only way to store VALUEs on the heap (GC-registered)
 4. ✅ Methods use `&self` instead of `self` to prevent moves
 5. ✅ All tests pass with the new safety model
@@ -150,7 +150,7 @@ let mut values = vec![arr_boxed];     // Safe!
 ### Benefits
 
 - **Compile-time safety**: Cannot accidentally move VALUEs to heap without GC registration
-- **Clear API**: `PinGuard` with `#[must_use]` makes requirements explicit
+- **Clear API**: `NewValue` with `#[must_use]` makes requirements explicit
 - **Zero runtime cost**: All safety checks are compile-time only
 - **Prevents Magnus-style UB**: See https://github.com/matsadler/magnus/issues/101
 

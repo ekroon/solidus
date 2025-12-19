@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{PinGuard, ReprValue, Value};
+use crate::value::{NewValue, ReprValue, Value};
 
 /// Ruby Hash (heap allocated).
 ///
@@ -27,7 +27,7 @@ pub struct RHash(Value);
 impl RHash {
     /// Create a new empty Ruby hash.
     ///
-    /// Returns a `PinGuard<RHash>` that must be pinned on the stack
+    /// Returns a `NewValue<RHash>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
     /// # Example
@@ -41,11 +41,11 @@ impl RHash {
     /// assert_eq!(hash.get().len(), 0);
     /// assert!(hash.get().is_empty());
     /// ```
-    pub fn new() -> PinGuard<Self> {
+    pub fn new() -> NewValue<Self> {
         // SAFETY: rb_hash_new creates a new Ruby hash
         let val = unsafe { rb_sys::rb_hash_new() };
         // SAFETY: rb_hash_new returns a valid VALUE
-        PinGuard::new(RHash(unsafe { Value::from_raw(val) }))
+        NewValue::new(RHash(unsafe { Value::from_raw(val) }))
     }
 
     /// Get the number of key-value pairs in the hash.
@@ -307,7 +307,7 @@ impl RHash {
 
     /// Create a Ruby hash from a Rust HashMap.
     ///
-    /// Returns a `PinGuard<RHash>` that must be pinned on the stack
+    /// Returns a `NewValue<RHash>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
     /// # Example
@@ -325,7 +325,7 @@ impl RHash {
     /// pin_on_stack!(hash = guard);
     /// assert_eq!(hash.get().len(), 2);
     /// ```
-    pub fn from_hash_map<K, V>(map: HashMap<K, V>) -> PinGuard<Self>
+    pub fn from_hash_map<K, V>(map: HashMap<K, V>) -> NewValue<Self>
     where
         K: IntoValue,
         V: IntoValue,
@@ -336,13 +336,13 @@ impl RHash {
         for (k, v) in map {
             hash.insert(k, v);
         }
-        PinGuard::new(hash)
+        NewValue::new(hash)
     }
 }
 
 impl Default for RHash {
     fn default() -> Self {
-        // SAFETY: We need to unwrap the PinGuard to return Self
+        // SAFETY: We need to unwrap the NewValue to return Self
         unsafe { RHash::new().into_inner() }
     }
 }

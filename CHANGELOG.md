@@ -22,18 +22,18 @@ the undefined behavior possible in libraries like Magnus.
    - Immediate types (`Fixnum`, `Symbol`, `Qnil`, `Qtrue`, `Qfalse`, `Flonum`) remain `Copy`
    - This prevents accidental duplication of VALUEs to heap storage
 
-2. **Creation functions now return `PinGuard<T>`**
-   - `RString::new()` returns `PinGuard<RString>` instead of `RString`
-   - `RArray::new()` returns `PinGuard<RArray>` instead of `RArray`
+2. **Creation functions now return `NewValue<T>`**
+   - `RString::new()` returns `NewValue<RString>` instead of `RString`
+   - `RArray::new()` returns `NewValue<RArray>` instead of `RArray`
    - All creation functions follow this pattern
-   - `PinGuard<T>` is `#[must_use]` - compiler warns if not consumed
+   - `NewValue<T>` is `#[must_use]` - compiler warns if not consumed
 
 3. **Methods now use `&self` instead of `self`**
    - `len(&self)` instead of `len(self)`
    - `to_string(&self)` instead of `to_string(self)`
    - All methods updated to prevent moves
 
-4. **New `PinGuard<T>` API for value creation**
+4. **New `NewValue<T>` API for value creation**
    - `.pin()` → converts to `StackPinned<T>` for stack storage
    - `.into_box()` → converts to `BoxValue<T>` for heap storage (GC-registered)
    - Must explicitly choose stack or heap storage
@@ -70,7 +70,7 @@ Previous Solidus versions (and current Magnus) relied on VALUE types being `Copy
 but this created a safety gap: users could copy VALUES out of pinned locations and
 store the copies on the heap, defeating the pinning protection.
 
-By making VALUE types `!Copy` and using `PinGuard<T>`, we enforce at compile time
+By making VALUE types `!Copy` and using `NewValue<T>`, we enforce at compile time
 that all VALUES are either:
 1. Stack-pinned (GC can see them)
 2. Explicitly boxed with GC registration (GC is notified)
@@ -87,15 +87,15 @@ and [Magnus issue #101](https://github.com/matsadler/magnus/issues/101) for deta
 
 ### Added
 
-- `PinGuard<T>` type for enforcing pinning from creation
-- `PinGuard::pin()` method to convert to `StackPinned<T>`
-- `PinGuard::into_box()` method to convert to `BoxValue<T>`
-- `PinGuard::as_ref()` and `as_mut()` for inspection without consuming
+- `NewValue<T>` type for enforcing pinning from creation
+- `NewValue::pin()` method to convert to `StackPinned<T>`
+- `NewValue::into_box()` method to convert to `BoxValue<T>`
+- `NewValue::as_ref()` and `as_mut()` for inspection without consuming
 
 ### Removed
 
 - `Copy` implementation from all heap-allocated VALUE types
-- Direct construction of VALUE types (now must go through `PinGuard`)
+- Direct construction of VALUE types (now must go through `NewValue`)
 
 ## [0.1.0] - TBD
 

@@ -294,7 +294,7 @@ There is no third "implicit" form. The macro always pins VALUE types and passes
 **Final implementation**:
 ```rust
 /// User writes Pin<&StackPinned<T>> explicitly:
-/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     // `other` is already pinned by the macro wrapper
 ///     let other_str = other.get().to_string()?;
 ///     // ...
@@ -307,7 +307,7 @@ There is no third "implicit" form. The macro always pins VALUE types and passes
 ///         let arg0_converted = RString::try_convert(Value::from_raw(arg0))?;
 ///         
 ///         // Pin argument on stack
-///         pin_on_stack!(arg0_pinned = PinGuard::new(arg0_converted));
+///         pin_on_stack!(arg0_pinned = NewValue::new(arg0_converted));
 ///         
 ///         // Pass pinned reference to user function
 ///         concat(self_converted, arg0_pinned)
@@ -327,7 +327,7 @@ There is no third "implicit" form. The macro always pins VALUE types and passes
 
 ```rust
 /// Mixed arguments example (final):
-/// fn insert(rb_self: RArray, index: i64, value: Pin<&StackPinned<RString>>) -> Result<PinGuard<RArray>, Error> {
+/// fn insert(rb_self: RArray, index: i64, value: Pin<&StackPinned<RString>>) -> Result<NewValue<RArray>, Error> {
 ///     // index is i64 (immediate) - passed by value
 ///     // value is Pin<&StackPinned<RString>> (heap) - pinned by wrapper
 /// }
@@ -343,7 +343,7 @@ There is no third "implicit" form. The macro always pins VALUE types and passes
 
 ```rust
 #[solidus_macros::function]
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     // name is pinned - access with .get()
     Ok(RString::new(&format!("Hello, {}!", name.get().to_string()?)))
 }

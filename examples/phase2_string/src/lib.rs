@@ -12,7 +12,7 @@ use solidus::prelude::*;
 /// Demonstrates basic string creation from Rust string slices.
 #[no_mangle]
 pub extern "C" fn example_string_from_str() -> rb_sys::VALUE {
-    // Create a Ruby string from a &str - returns PinGuard<RString>
+    // Create a Ruby string from a &str - returns NewValue<RString>
     let s = RString::new("Hello, Solidus!");
     
     // Check basic properties using as_ref() for temporary access
@@ -23,7 +23,7 @@ pub extern "C" fn example_string_from_str() -> rb_sys::VALUE {
     let rust_string = s.as_ref().to_string().unwrap();
     assert_eq!(rust_string, "Hello, Solidus!");
     
-    // Convert PinGuard to VALUE for return
+    // Convert NewValue to VALUE for return
     s.into_value().as_raw()
 }
 
@@ -169,7 +169,7 @@ pub extern "C" fn example_string_conversions(val: rb_sys::VALUE) -> rb_sys::VALU
         // Successfully converted - process it
         let upper = rust_string.to_uppercase();
         
-        // Convert back to Ruby string - PinGuard can be converted directly
+        // Convert back to Ruby string - NewValue can be converted directly
         return RString::new(&upper).into_value().as_raw();
     }
     
@@ -236,14 +236,14 @@ pub extern "C" fn example_find_encoding() -> rb_sys::VALUE {
     // Non-existent encoding returns None
     assert!(Encoding::find("INVALID-ENCODING").is_none());
     
-    // Return a UTF-8 string - can return PinGuard directly
+    // Return a UTF-8 string - can return NewValue directly
     RString::new("Encoding lookup works!").into_value().as_raw()
 }
 
 /// Example 12: Type-safe string handling
 ///
 /// Shows compile-time guarantees for string operations.
-fn concatenate_strings(s1: &RString, s2: &RString) -> Result<PinGuard<RString>, Error> {
+fn concatenate_strings(s1: &RString, s2: &RString) -> Result<NewValue<RString>, Error> {
     // Both strings are valid Ruby strings at compile time
     let str1 = s1.to_string()?;
     let str2 = s2.to_string()?;

@@ -30,9 +30,11 @@
 //! ```
 
 mod args;
+mod return_slot;
 mod return_value;
 
 pub use args::MethodArg;
+pub use return_slot::{MethodContext, ReturnCallback, ReturnSlot, ReturnSlotToken, ReturnedValue};
 pub use return_value::ReturnValue;
 
 /// Generate an extern "C" wrapper for a Ruby method.
@@ -110,7 +112,7 @@ macro_rules! method {
 
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let result = $func(self_converted, arg0_pinned);
 
@@ -142,11 +144,11 @@ macro_rules! method {
 
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let arg1_value = unsafe { $crate::Value::from_raw(arg1) };
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
-                $crate::pin_on_stack!(arg1_pinned = $crate::value::PinGuard::new(arg1_converted));
+                $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
                 let result = $func(self_converted, arg0_pinned, arg1_pinned);
 
@@ -179,15 +181,15 @@ macro_rules! method {
 
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let arg1_value = unsafe { $crate::Value::from_raw(arg1) };
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
-                $crate::pin_on_stack!(arg1_pinned = $crate::value::PinGuard::new(arg1_converted));
+                $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
                 let arg2_value = unsafe { $crate::Value::from_raw(arg2) };
                 let arg2_converted = $crate::convert::TryConvert::try_convert(arg2_value)?;
-                $crate::pin_on_stack!(arg2_pinned = $crate::value::PinGuard::new(arg2_converted));
+                $crate::pin_on_stack!(arg2_pinned = $crate::value::NewValue::new(arg2_converted));
 
                 let result = $func(self_converted, arg0_pinned, arg1_pinned, arg2_pinned);
 
@@ -221,19 +223,19 @@ macro_rules! method {
 
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let arg1_value = unsafe { $crate::Value::from_raw(arg1) };
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
-                $crate::pin_on_stack!(arg1_pinned = $crate::value::PinGuard::new(arg1_converted));
+                $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
                 let arg2_value = unsafe { $crate::Value::from_raw(arg2) };
                 let arg2_converted = $crate::convert::TryConvert::try_convert(arg2_value)?;
-                $crate::pin_on_stack!(arg2_pinned = $crate::value::PinGuard::new(arg2_converted));
+                $crate::pin_on_stack!(arg2_pinned = $crate::value::NewValue::new(arg2_converted));
 
                 let arg3_value = unsafe { $crate::Value::from_raw(arg3) };
                 let arg3_converted = $crate::convert::TryConvert::try_convert(arg3_value)?;
-                $crate::pin_on_stack!(arg3_pinned = $crate::value::PinGuard::new(arg3_converted));
+                $crate::pin_on_stack!(arg3_pinned = $crate::value::NewValue::new(arg3_converted));
 
                 let result = $func(
                     self_converted,
@@ -300,12 +302,12 @@ macro_rules! method {
 /// use solidus::prelude::*;
 ///
 /// // Arity 0 - no arguments
-/// fn greet() -> Result<PinGuard<RString>, Error> {
+/// fn greet() -> Result<NewValue<RString>, Error> {
 ///     Ok(RString::new("Hello, World!"))
 /// }
 ///
 /// // Arity 1 - one argument
-/// fn greet_name(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn greet_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     // name is automatically pinned by the wrapper
 ///     Ok(RString::new(&format!("Hello, {}!", name.get().to_string()?)))
 /// }
@@ -347,7 +349,7 @@ macro_rules! function {
             let result = ::std::panic::catch_unwind(|| {
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let result = $func(arg0_pinned);
 
@@ -376,11 +378,11 @@ macro_rules! function {
             let result = ::std::panic::catch_unwind(|| {
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let arg1_value = unsafe { $crate::Value::from_raw(arg1) };
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
-                $crate::pin_on_stack!(arg1_pinned = $crate::value::PinGuard::new(arg1_converted));
+                $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
                 let result = $func(arg0_pinned, arg1_pinned);
 
@@ -410,15 +412,15 @@ macro_rules! function {
             let result = ::std::panic::catch_unwind(|| {
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let arg1_value = unsafe { $crate::Value::from_raw(arg1) };
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
-                $crate::pin_on_stack!(arg1_pinned = $crate::value::PinGuard::new(arg1_converted));
+                $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
                 let arg2_value = unsafe { $crate::Value::from_raw(arg2) };
                 let arg2_converted = $crate::convert::TryConvert::try_convert(arg2_value)?;
-                $crate::pin_on_stack!(arg2_pinned = $crate::value::PinGuard::new(arg2_converted));
+                $crate::pin_on_stack!(arg2_pinned = $crate::value::NewValue::new(arg2_converted));
 
                 let result = $func(arg0_pinned, arg1_pinned, arg2_pinned);
 
@@ -449,19 +451,19 @@ macro_rules! function {
             let result = ::std::panic::catch_unwind(|| {
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
-                $crate::pin_on_stack!(arg0_pinned = $crate::value::PinGuard::new(arg0_converted));
+                $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
                 let arg1_value = unsafe { $crate::Value::from_raw(arg1) };
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
-                $crate::pin_on_stack!(arg1_pinned = $crate::value::PinGuard::new(arg1_converted));
+                $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
                 let arg2_value = unsafe { $crate::Value::from_raw(arg2) };
                 let arg2_converted = $crate::convert::TryConvert::try_convert(arg2_value)?;
-                $crate::pin_on_stack!(arg2_pinned = $crate::value::PinGuard::new(arg2_converted));
+                $crate::pin_on_stack!(arg2_pinned = $crate::value::NewValue::new(arg2_converted));
 
                 let arg3_value = unsafe { $crate::Value::from_raw(arg3) };
                 let arg3_converted = $crate::convert::TryConvert::try_convert(arg3_value)?;
-                $crate::pin_on_stack!(arg3_pinned = $crate::value::PinGuard::new(arg3_converted));
+                $crate::pin_on_stack!(arg3_pinned = $crate::value::NewValue::new(arg3_converted));
 
                 let result = $func(arg0_pinned, arg1_pinned, arg2_pinned, arg3_pinned);
 
@@ -497,7 +499,7 @@ macro_rules! function {
 }
 
 // NOTE: The original macro compile tests have been temporarily removed due to a type inference
-// edge case with the new PinGuard API. The macros work correctly in real usage (see
+// edge case with the new NewValue API. The macros work correctly in real usage (see
 // examples/phase3_methods and phase3_attr_macros). The issue only appears when trying to
 // assign macro expansions to typed function pointers in test context.
 //

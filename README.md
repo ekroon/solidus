@@ -23,13 +23,13 @@ This is error-prone, not enforced by the type system, and not visible at the API
 Solidus uses Rust's type system to enforce stack locality at compile time through **pinned-from-creation**:
 
 1. **All VALUE types are `!Copy`** - Cannot be accidentally copied to heap
-2. **Creation returns `PinGuard<T>`** - Must explicitly choose stack or heap storage
+2. **Creation returns `NewValue<T>`** - Must explicitly choose stack or heap storage
 3. **Compile-time enforcement** - Cannot forget to pin or box a value
 
 ```rust
 use solidus::prelude::*;
 
-// Creating a value returns a PinGuard
+// Creating a value returns a NewValue
 let guard = RString::new("hello");
 
 // Option 1: Pin on stack (common case)
@@ -52,7 +52,7 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 /// A function that greets someone by name
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name_str)))
 }
@@ -133,7 +133,7 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 ## Key Features
 
 - **Safety by default**: Ruby values must be pinned from creation - enforced at compile time
-- **Clear API**: `PinGuard<T>` with `#[must_use]` makes requirements explicit
+- **Clear API**: `NewValue<T>` with `#[must_use]` makes requirements explicit
 - **Zero-cost abstractions**: All safety checks are compile-time only
 - **Immediate values optimized**: `Fixnum`, `Symbol`, `true`, `false`, `nil` remain `Copy`
 - **Prevents Magnus-style UB**: Compiler enforces what Magnus only documents
@@ -145,7 +145,7 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 | Type | Description |
 |------|-------------|
 | `Value` | Base wrapper around Ruby's VALUE (`!Copy`) |
-| `PinGuard<T>` | Guard enforcing pinning or boxing of new values |
+| `NewValue<T>` | Guard enforcing pinning or boxing of new values |
 | `StackPinned<T>` | `!Unpin` wrapper for stack-pinned values |
 | `BoxValue<T>` | Heap-allocated, GC-registered wrapper |
 | `Ruby` | Handle to the Ruby VM |
@@ -188,7 +188,7 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 |--------|--------|---------|
 | Heap safety | Documentation only | Compile-time enforced |
 | VALUE types | `Copy` | `!Copy` |
-| Value creation | Returns value directly | Returns `PinGuard<T>` |
+| Value creation | Returns value directly | Returns `NewValue<T>` |
 | Heap storage | Unsafe, UB if forgotten | Explicit `BoxValue<T>` with GC registration |
 | Immediate values | `Copy` | `Copy` (same) |
 | Runtime overhead | None | None (compile-time only) |

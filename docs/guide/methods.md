@@ -61,7 +61,7 @@ rclass.define_method("length", method!(length, 0), 0)?;
 use solidus::prelude::*;
 use std::pin::Pin;
 
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
@@ -107,7 +107,7 @@ function!(function_name, arity)
 ```rust
 use solidus::prelude::*;
 
-fn greet() -> Result<PinGuard<RString>, Error> {
+fn greet() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello, World!"))
 }
 
@@ -121,7 +121,7 @@ ruby.define_global_function("greet", function!(greet, 0), 0)?;
 use solidus::prelude::*;
 use std::pin::Pin;
 
-fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
     Ok(RString::new(&input.to_uppercase()))
 }
@@ -159,7 +159,7 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 #[solidus::method]
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
     Ok(RString::new(&format!("{}{}", self_str, other_str)))
@@ -180,7 +180,7 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 #[solidus::function]
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name_str)))
 }
@@ -239,7 +239,7 @@ the GC.
 For Ruby VALUE types (RString, RArray, RHash, etc.), use `Pin<&StackPinned<T>>`:
 
 ```rust
-fn example(arg: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+fn example(arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     // Access the inner value with .get()
     let s = arg.get().to_string()?;
     Ok(RString::new(&format!("Got: {}", s)))
@@ -265,7 +265,7 @@ automatically converts Ruby VALUES to these types via `TryConvert`:
 
 ```rust
 #[solidus::method]
-fn repeat(rb_self: RString, count: i64) -> Result<PinGuard<RString>, Error> {
+fn repeat(rb_self: RString, count: i64) -> Result<NewValue<RString>, Error> {
     let s = rb_self.to_string()?;
     Ok(RString::new(&s.repeat(count as usize)))
 }
@@ -305,7 +305,7 @@ Methods must return `Result<T, Error>` where `T` implements `IntoValue`:
 
 ```rust
 // Return a Ruby string
-fn example() -> Result<PinGuard<RString>, Error> {
+fn example() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("hello"))
 }
 
@@ -471,18 +471,18 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 // Instance method
-fn greet(rb_self: RString) -> Result<PinGuard<RString>, Error> {
+fn greet(rb_self: RString) -> Result<NewValue<RString>, Error> {
     let name = rb_self.to_string()?;
     Ok(RString::new(&format!("Hello, {}!", name)))
 }
 
 // Class method
-fn create_default() -> Result<PinGuard<RString>, Error> {
+fn create_default() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("default"))
 }
 
 // Global function
-fn hello() -> Result<PinGuard<RString>, Error> {
+fn hello() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello from Solidus!"))
 }
 

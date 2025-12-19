@@ -23,7 +23,7 @@
 //!
 //! ```ignore
 //! #[solidus::method]
-//! fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+//! fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 //!     // Access the inner value with .get()
 //!     let self_str = rb_self.get().to_string()?;
 //!     let other_str = other.get().to_string()?;
@@ -40,7 +40,7 @@
 //!
 //! ```ignore
 //! #[solidus::method]
-//! fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<PinGuard<RString>, Error> {
+//! fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<NewValue<RString>, Error> {
 //!     // Use `count` directly as i64
 //! }
 //! ```
@@ -655,7 +655,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     let self_str = rb_self.get().to_string()?;
 ///     let other_str = other.get().to_string()?;  // Access with .get()
 ///     RString::new(&format!("{}{}", self_str, other_str))
@@ -671,7 +671,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<PinGuard<RString>, Error> {
+/// fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<NewValue<RString>, Error> {
 ///     let s = rb_self.get().to_string()?;
 ///     RString::new(&s.repeat(count as usize))
 /// }
@@ -686,7 +686,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::method]
-/// fn greet(rb_self: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn greet(rb_self: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     // ...
 /// }
 /// ```
@@ -694,7 +694,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// The macro generates:
 ///
 /// ```ignore
-/// fn greet(rb_self: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn greet(rb_self: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     // ...
 /// }
 ///
@@ -718,7 +718,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// // Ruby VALUE types (including self) use Pin<&StackPinned<T>>
 /// #[solidus::method]
-/// fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn concat(rb_self: Pin<&StackPinned<RString>>, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     let self_str = rb_self.get().to_string()?;
 ///     let other_str = other.get().to_string()?;
 ///     RString::new(&format!("{}{}", self_str, other_str))
@@ -726,7 +726,7 @@ pub fn wrap(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// // Mixed: pinned self with Rust primitive
 /// #[solidus::method]
-/// fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<PinGuard<RString>, Error> {
+/// fn repeat(rb_self: Pin<&StackPinned<RString>>, count: i64) -> Result<NewValue<RString>, Error> {
 ///     let s = rb_self.get().to_string()?;
 ///     RString::new(&s.repeat(count as usize))
 /// }
@@ -776,7 +776,7 @@ pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// #[solidus::function]
-/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     RString::new(&format!("Hello, {}!", name.get().to_string()?))
 /// }
 /// ```
@@ -836,7 +836,7 @@ pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// // Ruby VALUE types use Pin<&StackPinned<T>>
 /// #[solidus::function]
-/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<PinGuard<RString>, Error> {
+/// fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     let name_str = name.get().to_string()?;
 ///     RString::new(&format!("Hello, {}!", name_str))
 /// }
@@ -1018,7 +1018,7 @@ fn generate_method_wrapper_dynamic(
         conversion_stmts.push(quote! {
             let self_value = unsafe { solidus::Value::from_raw(rb_self) };
             let self_converted: #self_type = solidus::convert::TryConvert::try_convert(self_value)?;
-            solidus::pin_on_stack!(self_pinned = solidus::value::PinGuard::new(self_converted));
+            solidus::pin_on_stack!(self_pinned = solidus::value::NewValue::new(self_converted));
         });
         // Determine how to pass the argument to the user function
         if self_param.is_explicit_pinned {
@@ -1054,7 +1054,7 @@ fn generate_method_wrapper_dynamic(
             conversion_stmts.push(quote! {
                 let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
                 let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
-                solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
+                solidus::pin_on_stack!(#arg_pinned = solidus::value::NewValue::new(#arg_converted));
             });
 
             // Determine how to pass the argument to the user function
@@ -1151,7 +1151,7 @@ fn generate_function_wrapper_dynamic(
             conversion_stmts.push(quote! {
                 let #arg_value = unsafe { solidus::Value::from_raw(#arg_value) };
                 let #arg_converted: #inner_type = solidus::convert::TryConvert::try_convert(#arg_value)?;
-                solidus::pin_on_stack!(#arg_pinned = solidus::value::PinGuard::new(#arg_converted));
+                solidus::pin_on_stack!(#arg_pinned = solidus::value::NewValue::new(#arg_converted));
             });
 
             // Determine how to pass the argument to the user function

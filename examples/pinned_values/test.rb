@@ -216,6 +216,6 @@ puts "     - This causes use-after-free bugs that are hard to debug"
 puts
 puts "  4. COMPILE-TIME SAFETY"
 puts "     - All VALUE types are !Copy (can't accidentally move to heap)"
-puts "     - Creation returns PinGuard (must pin or box explicitly)"
+puts "     - Creation returns NewValue (must pin or box explicitly)"
 puts "     - The compiler enforces what Magnus only documents"
 puts

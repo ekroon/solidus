@@ -300,7 +300,7 @@ fn parse_name(name: Pin<&StackPinned<RString>>) -> Result<String, Error> {
 fn create_greeting(
     name: Pin<&StackPinned<RString>>,
     age: i64,
-) -> Result<PinGuard<RString>, Error> {
+) -> Result<NewValue<RString>, Error> {
     // Validate inputs - errors propagate with ?
     let validated_name = parse_name(name)?;
     let validated_age = validate_age(age)?;

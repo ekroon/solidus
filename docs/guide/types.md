@@ -50,13 +50,13 @@ They must be either stack-pinned or explicitly boxed to prevent GC issues.
 | Class | Ruby class objects | `RClass` |
 | Module | Ruby module objects | `RModule` |
 
-Heap types return `PinGuard<T>` from constructors, enforcing proper handling:
+Heap types return `NewValue<T>` from constructors, enforcing proper handling:
 
 ```rust
 use solidus::types::RString;
 use solidus::pin_on_stack;
 
-// Creating a string returns PinGuard<RString>
+// Creating a string returns NewValue<RString>
 let guard = RString::new("hello");
 
 // Pin on stack for local use

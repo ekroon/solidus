@@ -784,16 +784,16 @@ explicit cloning where needed.
 
 **Status**: ✅ Complete - Method macros work correctly with `!Copy` types.
 
-### Task 2.10.5: Design and implement PinGuard creation API ✅ COMPLETE
+### Task 2.10.5: Design and implement NewValue creation API ✅ COMPLETE
 
 **File**: `crates/solidus/src/value/guard.rs`
 
-**Status**: ✅ Complete - PinGuard pattern implemented and working.
+**Status**: ✅ Complete - NewValue pattern implemented and working.
 
-**Implementation**: Creation functions now return `PinGuard<T>`:
+**Implementation**: Creation functions now return `NewValue<T>`:
 
 ```rust
-/// Create a new RString, returning a PinGuard that must be pinned or boxed
+/// Create a new RString, returning a NewValue that must be pinned or boxed
 let guard = RString::new("hello")?;
 
 // Option 1: Pin on stack (common case)
@@ -807,18 +807,18 @@ let mut strings = vec![boxed]; // Safe!
 ```
 
 Key features:
-- `PinGuard<T>` is `#[must_use]` - compiler warns if not pinned/boxed
-- `PinGuard<T>` is `!Unpin` via `PhantomPinned` - cannot be stored in collections
+- `NewValue<T>` is `#[must_use]` - compiler warns if not pinned/boxed
+- `NewValue<T>` is `!Unpin` via `PhantomPinned` - cannot be stored in collections
 - `.pin()` → `StackPinned<T>` for stack storage (common case)
 - `.into_box()` → `BoxValue<T>` for heap storage (GC-registered)
 - Clear, explicit API that enforces safety at compile time
 
 All creation functions updated:
-- [x] `RString::new()` returns `PinGuard<RString>`
-- [x] `RArray::new()` returns `PinGuard<RArray>`
-- [x] `RHash::new()` returns `PinGuard<RHash>`
-- [x] `Integer::from_i64()` returns `PinGuard<Integer>`
-- [x] `Float::from_f64()` returns `PinGuard<Float>`
+- [x] `RString::new()` returns `NewValue<RString>`
+- [x] `RArray::new()` returns `NewValue<RArray>`
+- [x] `RHash::new()` returns `NewValue<RHash>`
+- [x] `Integer::from_i64()` returns `NewValue<Integer>`
+- [x] `Float::from_f64()` returns `NewValue<Float>`
 - [x] All other creation functions updated
 
 ### Task 2.10.6: Update BoxValue for !Copy types ✅ COMPLETE
@@ -826,7 +826,7 @@ All creation functions updated:
 **File**: `crates/solidus/src/value/boxed.rs`
 
 - [x] Ensure `BoxValue::new()` works with `!Copy` types
-- [x] Add conversion from `PinGuard<T>` via `.into_box()`
+- [x] Add conversion from `NewValue<T>` via `.into_box()`
 - [x] Update documentation with heap storage patterns
 - [x] Add tests
 
@@ -836,21 +836,21 @@ impl<T: ReprValue> BoxValue<T> {
     pub fn new(value: T) -> Self;
 }
 
-// Via PinGuard
+// Via NewValue
 let guard = RString::new("hello");
 let boxed = guard.into_box();  // Explicit, GC-registered
 ```
 
-**Status**: ✅ Complete - BoxValue works seamlessly with PinGuard pattern.
+**Status**: ✅ Complete - BoxValue works seamlessly with NewValue pattern.
 
 ### Task 2.10.7: Update all examples ✅ COMPLETE
 
 **Directory**: `examples/`
 
-- [x] Update `phase2_string` example for !Copy RString and PinGuard
-- [x] Update `phase2_array` example for !Copy RArray and PinGuard
-- [x] Update `phase2_hash` example for !Copy RHash and PinGuard
-- [x] Update `phase2_numeric_heap` example for !Copy Integer/Float and PinGuard
+- [x] Update `phase2_string` example for !Copy RString and NewValue
+- [x] Update `phase2_array` example for !Copy RArray and NewValue
+- [x] Update `phase2_hash` example for !Copy RHash and NewValue
+- [x] Update `phase2_numeric_heap` example for !Copy Integer/Float and NewValue
 - [x] Update `phase2_class_module` example for !Copy RClass/RModule
 - [x] Update `phase2_conversions` example
 - [x] Update `phase3_methods` example
@@ -863,7 +863,7 @@ let boxed = guard.into_box();  // Explicit, GC-registered
 - [x] Update `phase-2-types.md` code examples (remove Copy from derives)
 - [x] Update doc comments on all affected types
 - [x] Add section on VALUE creation and pinning patterns
-- [x] Update README with PinGuard examples
+- [x] Update README with NewValue examples
 - [x] Update AGENTS.md with new method signature patterns
 - [x] Update PROGRESS.md to mark ADR-007 complete
 - [x] Create/update CHANGELOG.md to document the breaking change
@@ -882,7 +882,7 @@ let boxed = guard.into_box();  // Explicit, GC-registered
 **Status**: ✅ Complete - All tests pass, safety guarantees verified.
 
 **Acceptance**: All VALUE types are `!Copy`, all methods use `&self` appropriately,
-all tests pass, `PinGuard<T>` enforces pinning from creation, `BoxValue<T>` is the 
+all tests pass, `NewValue<T>` enforces pinning from creation, `BoxValue<T>` is the 
 only way to store VALUEs on the heap.
 
 ---
@@ -897,7 +897,7 @@ Stage 10 (ADR-007) is now fully implemented! All tasks completed:
 2. ✅ Updated `ReprValue` trait to use `&self` instead of `self`
 3. ✅ Updated all method signatures to use `&self` instead of `self`
 4. ✅ Method macros updated for `!Copy` compatibility
-5. ✅ Implemented `PinGuard<T>` pattern for safe value creation
+5. ✅ Implemented `NewValue<T>` pattern for safe value creation
 6. ✅ Updated `BoxValue<T>` to work with new API
 7. ✅ Updated all examples
 8. ✅ Updated all documentation
@@ -906,7 +906,7 @@ Stage 10 (ADR-007) is now fully implemented! All tasks completed:
 ### Key Achievements
 
 - **Compile-time safety**: VALUES cannot be moved to heap without explicit `BoxValue`
-- **Clear API**: `PinGuard<T>` with `#[must_use]` makes requirements explicit
+- **Clear API**: `NewValue<T>` with `#[must_use]` makes requirements explicit
 - **Zero runtime cost**: All safety checks are at compile time
 - **Prevents UB**: Addresses the safety gap identified in Magnus (issue #101)
 
@@ -914,7 +914,7 @@ Stage 10 (ADR-007) is now fully implemented! All tasks completed:
 
 **Creating values**:
 ```rust
-let guard = RString::new("hello")?;  // Returns PinGuard<RString>
+let guard = RString::new("hello")?;  // Returns NewValue<RString>
 let pinned = guard.pin();             // For stack storage
 pin_on_stack!(s = pinned);            // Pin on stack
 // OR

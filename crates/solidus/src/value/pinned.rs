@@ -101,7 +101,7 @@ impl<T> Deref for StackPinned<T> {
 
 /// Create a stack-pinned value.
 ///
-/// This macro accepts `PinGuard<T>` expressions from value creation
+/// This macro accepts `NewValue<T>` expressions from value creation
 /// (e.g., `RString::new("hello")`).
 ///
 /// The macro atomically consumes the guard and creates a pinned reference,
@@ -189,18 +189,18 @@ mod tests {
 
     #[test]
     fn test_pin_on_stack_macro() {
-        // Test with PinGuard
-        use crate::value::PinGuard;
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        // Test with NewValue
+        use crate::value::NewValue;
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
         pin_on_stack!(value = guard);
         assert!(value.get().is_nil());
     }
 
     #[test]
     fn test_pin_on_stack_macro_mut() {
-        // Test with PinGuard (mutable)
-        use crate::value::PinGuard;
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        // Test with NewValue (mutable)
+        use crate::value::NewValue;
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
         pin_on_stack!(mut value = guard);
         // Just check that it works - convert to immutable ref to call get()
         assert!(value.as_ref().get().is_nil());
@@ -208,9 +208,9 @@ mod tests {
 
     #[test]
     fn test_pin_on_stack_with_value() {
-        // Test pinning a Value via PinGuard
-        use crate::value::PinGuard;
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        // Test pinning a Value via NewValue
+        use crate::value::NewValue;
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
         pin_on_stack!(value = guard);
         assert!(value.get().is_nil());
     }

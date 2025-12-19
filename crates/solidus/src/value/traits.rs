@@ -61,10 +61,10 @@ pub trait ReprValue: Clone {
     }
 }
 
-/// Internal trait for pin_on_stack! macro to extract value from PinGuard.
+/// Internal trait for pin_on_stack! macro to extract value from NewValue.
 ///
 /// This trait exists solely to help with type inference in macro context.
-/// It is only implemented for `PinGuard<T>`.
+/// It is only implemented for `NewValue<T>`.
 #[doc(hidden)]
 pub trait IntoPinnable {
     /// The resulting type after unpacking the guard

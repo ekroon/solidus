@@ -26,7 +26,7 @@ ruby examples/hello_world/test.rb
 use solidus::prelude::*;
 
 #[solidus_macros::function]
-fn hello() -> Result<PinGuard<RString>, Error> {
+fn hello() -> Result<NewValue<RString>, Error> {
     Ok(RString::new("Hello from Solidus!"))
 }
 

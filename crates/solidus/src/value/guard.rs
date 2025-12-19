@@ -1,4 +1,4 @@
-//! PinGuard type for enforcing pinning at VALUE creation time.
+//! NewValue type for enforcing pinning at VALUE creation time.
 
 use std::marker::PhantomPinned;
 use std::ops::{Deref, DerefMut};
@@ -9,7 +9,7 @@ use super::{BoxValue, ReprValue};
 /// A guard that enforces pinning of newly-created Ruby values.
 ///
 /// When you create a new Ruby value (e.g., via `RString::new()`), it returns
-/// a `PinGuard<T>`. This forces you to make an explicit choice:
+/// a `NewValue<T>`. This forces you to make an explicit choice:
 ///
 /// - **Stack pin it** with `pin_on_stack!` macro (fast, common case)
 /// - **Heap box it** with `.into_box()` → `BoxValue<T>` (GC-registered, for collections)
@@ -23,14 +23,14 @@ use super::{BoxValue, ReprValue};
 /// is moved to the heap without GC registration, the GC cannot see it and
 /// may collect the underlying Ruby object, leading to use-after-free bugs.
 ///
-/// By making all Ruby types `!Copy` and using `PinGuard`, we ensure that
+/// By making all Ruby types `!Copy` and using `NewValue`, we ensure that
 /// values are either:
 /// 1. Stack-pinned (GC can see them)
 /// 2. Explicitly boxed and GC-registered (GC is notified)
 ///
 /// # Type Safety
 ///
-/// `PinGuard` is `!Unpin` (via `PhantomPinned`), making it clear that this
+/// `NewValue` is `!Unpin` (via `PhantomPinned`), making it clear that this
 /// is not a final storage type. You cannot store it in collections or move
 /// it around freely. It exists solely to bridge the gap between creation
 /// and pinning/boxing.
@@ -41,7 +41,7 @@ use super::{BoxValue, ReprValue};
 /// use solidus::RString;
 /// use solidus::pin_on_stack;
 ///
-/// // Creating a Ruby string returns a PinGuard
+/// // Creating a Ruby string returns a NewValue
 /// let guard = RString::new("hello");
 ///
 /// // Option 1: Pin on stack (common case)
@@ -80,19 +80,19 @@ use super::{BoxValue, ReprValue};
 /// The new design eliminates this by making `pin_on_stack!` consume the guard directly,
 /// creating the StackPinned and pinning it atomically in one step.
 #[must_use = "VALUE must be pinned on stack or explicitly boxed"]
-pub struct PinGuard<T: ReprValue> {
+pub struct NewValue<T: ReprValue> {
     value: T,
-    /// Makes PinGuard !Unpin, preventing accidental storage in collections.
+    /// Makes NewValue !Unpin, preventing accidental storage in collections.
     _pin: PhantomPinned,
 }
 
-impl<T: ReprValue> PinGuard<T> {
-    /// Create a new PinGuard wrapping a Ruby value.
+impl<T: ReprValue> NewValue<T> {
+    /// Create a new NewValue wrapping a Ruby value.
     ///
     /// This is `pub` so type constructors (like `RString::new()`) can return guards.
     #[inline]
     pub fn new(value: T) -> Self {
-        PinGuard {
+        NewValue {
             value,
             _pin: PhantomPinned,
         }
@@ -144,7 +144,7 @@ impl<T: ReprValue> PinGuard<T> {
     ///
     /// This is unsafe because it allows the VALUE to escape without being
     /// pinned or boxed. The caller must ensure the value is immediately
-    /// used in a safe context (e.g., wrapped back into a PinGuard or
+    /// used in a safe context (e.g., wrapped back into a NewValue or
     /// immediately pinned).
     ///
     /// This is primarily used internally when converting between guard types.
@@ -154,23 +154,23 @@ impl<T: ReprValue> PinGuard<T> {
     }
 }
 
-// Implement Clone for PinGuard
-impl<T: ReprValue> Clone for PinGuard<T> {
+// Implement Clone for NewValue
+impl<T: ReprValue> Clone for NewValue<T> {
     #[inline]
     fn clone(&self) -> Self {
-        PinGuard {
+        NewValue {
             value: self.value.clone(),
             _pin: PhantomPinned,
         }
     }
 }
 
-// Note: We do NOT implement ReprValue for PinGuard because:
-// 1. PinGuard is a temporary guard type, not a final value type
+// Note: We do NOT implement ReprValue for NewValue because:
+// 1. NewValue is a temporary guard type, not a final value type
 // 2. We use Deref/DerefMut to access the inner value's methods instead
 
-// Implement IntoValue for PinGuard to allow returning guarded values directly from methods
-impl<T: ReprValue> crate::convert::IntoValue for PinGuard<T> {
+// Implement IntoValue for NewValue to allow returning guarded values directly from methods
+impl<T: ReprValue> crate::convert::IntoValue for NewValue<T> {
     #[inline]
     fn into_value(self) -> super::Value {
         // When returning from a method, we can safely unwrap the guard
@@ -181,7 +181,7 @@ impl<T: ReprValue> crate::convert::IntoValue for PinGuard<T> {
 }
 
 // Implement Deref to allow transparent access to the inner value's methods
-impl<T: ReprValue> Deref for PinGuard<T> {
+impl<T: ReprValue> Deref for NewValue<T> {
     type Target = T;
 
     #[inline]
@@ -191,7 +191,7 @@ impl<T: ReprValue> Deref for PinGuard<T> {
 }
 
 // Implement DerefMut to allow mutable access to the inner value's methods
-impl<T: ReprValue> DerefMut for PinGuard<T> {
+impl<T: ReprValue> DerefMut for NewValue<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.value
@@ -199,7 +199,7 @@ impl<T: ReprValue> DerefMut for PinGuard<T> {
 }
 
 // Implement AsRef to provide standard trait access
-impl<T: ReprValue> AsRef<T> for PinGuard<T> {
+impl<T: ReprValue> AsRef<T> for NewValue<T> {
     #[inline]
     fn as_ref(&self) -> &T {
         &self.value
@@ -207,15 +207,15 @@ impl<T: ReprValue> AsRef<T> for PinGuard<T> {
 }
 
 // Implement AsMut to provide standard trait access
-impl<T: ReprValue> AsMut<T> for PinGuard<T> {
+impl<T: ReprValue> AsMut<T> for NewValue<T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         &mut self.value
     }
 }
 
-// Implement IntoPinnable for PinGuard to help with type inference in pin_on_stack! macro
-impl<T: ReprValue> IntoPinnable for PinGuard<T> {
+// Implement IntoPinnable for NewValue to help with type inference in pin_on_stack! macro
+impl<T: ReprValue> IntoPinnable for NewValue<T> {
     type Target = T;
 
     #[inline]
@@ -230,12 +230,12 @@ mod tests {
     use crate::value::Value;
 
     #[test]
-    fn test_pin_guard_to_pin_on_stack() {
+    fn test_new_value_to_pin_on_stack() {
         // Test the atomic pinning workflow
         use crate::pin_on_stack;
 
         // SAFETY: Qnil is always a valid VALUE
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
 
         // The guard is atomically consumed and pinned
         pin_on_stack!(pinned = guard);
@@ -249,10 +249,10 @@ mod tests {
     // This is tested in integration tests with rb-sys-test-helpers
     #[cfg(any(feature = "embed", feature = "link-ruby"))]
     #[test]
-    fn test_pin_guard_into_box() {
+    fn test_new_value_into_box() {
         // Create a guard
         // SAFETY: Qnil is always a valid VALUE
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
 
         // Box it
         let boxed = guard.into_box();
@@ -262,9 +262,9 @@ mod tests {
     }
 
     #[test]
-    fn test_pin_guard_as_ref() {
+    fn test_new_value_as_ref() {
         // SAFETY: Qnil is always a valid VALUE
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
 
         // We can inspect without consuming
         let value_ref = guard.as_ref();
@@ -276,9 +276,9 @@ mod tests {
     }
 
     #[test]
-    fn test_pin_guard_as_mut() {
+    fn test_new_value_as_mut() {
         // SAFETY: Qnil is always a valid VALUE
-        let mut guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        let mut guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
 
         // We can mutate without consuming
         let value_mut = guard.as_mut();
@@ -289,13 +289,13 @@ mod tests {
         pin_on_stack!(_pinned = guard);
     }
 
-    // This test verifies that PinGuard is !Unpin
+    // This test verifies that NewValue is !Unpin
     #[test]
-    fn test_pin_guard_is_not_unpin() {
+    fn test_new_value_is_not_unpin() {
         // SAFETY: Qnil is always a valid VALUE
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
 
-        // PinGuard should be !Unpin due to PhantomPinned
+        // NewValue should be !Unpin due to PhantomPinned
         // This means it cannot be stored in collections without
         // first calling .into_box()
 
@@ -309,23 +309,23 @@ mod tests {
     }
 
     #[test]
-    fn test_pin_guard_size() {
-        // PinGuard should be the same size as the wrapped type
+    fn test_new_value_size() {
+        // NewValue should be the same size as the wrapped type
         // (PhantomPinned is zero-sized)
         assert_eq!(
-            std::mem::size_of::<PinGuard<Value>>(),
+            std::mem::size_of::<NewValue<Value>>(),
             std::mem::size_of::<Value>()
         );
     }
 
     #[test]
-    fn test_pin_guard_with_pin_on_stack_macro() {
-        // Test that PinGuard works with pin_on_stack! macro atomically
+    fn test_new_value_with_pin_on_stack_macro() {
+        // Test that NewValue works with pin_on_stack! macro atomically
         use crate::pin_on_stack;
 
         // Direct pattern - guard is consumed atomically by the macro
         // SAFETY: Qnil is always a valid VALUE
-        let guard = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
+        let guard = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) });
         pin_on_stack!(pinned_value = guard);
 
         // pinned_value is Pin<&StackPinned<Value>>
@@ -335,7 +335,7 @@ mod tests {
         // Pattern 2: One-shot - direct expression
         // SAFETY: Qnil is always a valid VALUE
         pin_on_stack!(
-            pinned_direct = PinGuard::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) })
+            pinned_direct = NewValue::new(unsafe { Value::from_raw(rb_sys::Qnil.into()) })
         );
         let inner2 = pinned_direct.get();
         assert!(inner2.is_nil());

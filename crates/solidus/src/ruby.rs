@@ -328,10 +328,10 @@ impl Ruby {
     /// # Example
     ///
     /// ```no_run
-    /// use solidus::{function, Ruby, PinGuard, Error};
+    /// use solidus::{function, Ruby, NewValue, Error};
     /// use solidus::types::RString;
     ///
-    /// fn greet() -> Result<PinGuard<RString>, Error> {
+    /// fn greet() -> Result<NewValue<RString>, Error> {
     ///     Ok(RString::new("Hello, World!"))
     /// }
     ///

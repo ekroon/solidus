@@ -27,9 +27,9 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 }
 
 impl MyClass {
-    fn greet(&self, name: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+    fn greet(&self, name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
         let name_str = name.get().to_string()?;
-        RString::new(&format!("Hello, {}!", name_str))
+        Ok(RString::new(&format!("Hello, {}!", name_str)))
     }
 }
 ```

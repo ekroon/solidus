@@ -238,7 +238,7 @@ pub trait Module: ReprValue {
     /// use solidus::prelude::*;
     /// use solidus::method;
     ///
-    /// fn my_method(rb_self: RString) -> Result<PinGuard<RString>, Error> {
+    /// fn my_method(rb_self: RString) -> Result<NewValue<RString>, Error> {
     ///     Ok(RString::new("result"))
     /// }
     ///
