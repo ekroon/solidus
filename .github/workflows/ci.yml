@@ -107,3 +107,84 @@ jobs:
         run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+
+  # Test example extensions by building and running their Ruby test scripts
+  test-examples:
+    name: Examples (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Test hello_world example
+        run: |
+          cd examples/hello_world
+          cargo build
+          cd target/debug
+          if [ -f libhello_world.dylib ]; then
+            ln -sf libhello_world.dylib hello_world.bundle
+          elif [ -f libhello_world.so ]; then
+            ln -sf libhello_world.so hello_world.so
+          fi
+          cd ../..
+          ruby test.rb
+
+      - name: Test pinned_values example
+        run: |
+          cd examples/pinned_values
+          cargo build
+          cd target/debug
+          if [ -f libpinned_values.dylib ]; then
+            ln -sf libpinned_values.dylib pinned_values.bundle
+          elif [ -f libpinned_values.so ]; then
+            ln -sf libpinned_values.so pinned_values.so
+          fi
+          cd ../..
+          ruby test.rb
+
+      - name: Test phase3_methods example
+        run: |
+          cd examples/phase3_methods
+          cargo build
+          cd target/debug
+          if [ -f libphase3_methods.dylib ]; then
+            ln -sf libphase3_methods.dylib phase3_methods.bundle
+          elif [ -f libphase3_methods.so ]; then
+            ln -sf libphase3_methods.so phase3_methods.so
+          fi
+          cd ../..
+          ruby test.rb
+
+      - name: Test phase3_attr_macros example
+        run: |
+          cd examples/phase3_attr_macros
+          cargo build
+          cd target/debug
+          if [ -f libphase3_attr_macros.dylib ]; then
+            ln -sf libphase3_attr_macros.dylib phase3_attr_macros.bundle
+          elif [ -f libphase3_attr_macros.so ]; then
+            ln -sf libphase3_attr_macros.so phase3_attr_macros.so
+          fi
+          cd ../..
+          ruby test.rb
+
+      - name: Test phase4_typed_data example
+        run: |
+          cd examples/phase4_typed_data
+          cargo build
+          cd target/debug
+          if [ -f libphase4_typed_data.dylib ]; then
+            ln -sf libphase4_typed_data.dylib phase4_typed_data.bundle
+          elif [ -f libphase4_typed_data.so ]; then
+            ln -sf libphase4_typed_data.so phase4_typed_data.so
+          fi
+          cd ../..
+          ruby test.rb
