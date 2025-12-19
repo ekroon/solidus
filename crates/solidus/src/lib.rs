@@ -135,6 +135,7 @@ pub mod prelude {
     pub use crate::convert::{IntoValue, TryConvert};
     pub use crate::error::{Error, ExceptionClass};
     pub use crate::init;
+    pub use crate::method::{ReturnWitness, WitnessedReturn};
     pub use crate::pin_on_stack;
     pub use crate::ruby::Ruby;
     pub use crate::typed_data::{
