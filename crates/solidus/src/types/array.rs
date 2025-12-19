@@ -13,11 +13,13 @@ use crate::value::{BoxValue, NewValue, ReprValue, Value};
 ///
 /// ```no_run
 /// use solidus::types::RArray;
+/// use solidus::pin_on_stack;
 ///
-/// let arr = RArray::new();
-/// arr.push(42i64);
-/// arr.push("hello");
-/// assert_eq!(arr.len(), 2);
+/// // SAFETY: Value is immediately pinned
+/// pin_on_stack!(arr = unsafe { RArray::new() });
+/// arr.get().push(42i64);
+/// arr.get().push("hello");
+/// assert_eq!(arr.get().len(), 2);
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]
@@ -133,11 +135,13 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.push(1);
-    /// arr.push(2);
-    /// assert_eq!(arr.len(), 2);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().push(1);
+    /// arr.get().push(2);
+    /// assert_eq!(arr.get().len(), 2);
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
@@ -151,12 +155,14 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// assert!(arr.is_empty());
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// assert!(arr.get().is_empty());
     ///
-    /// arr.push(1);
-    /// assert!(!arr.is_empty());
+    /// arr.get().push(1);
+    /// assert!(!arr.get().is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -171,11 +177,13 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.push(42i64);
-    /// arr.push("hello");
-    /// assert_eq!(arr.len(), 2);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().push(42i64);
+    /// arr.get().push("hello");
+    /// assert_eq!(arr.get().len(), 2);
     /// ```
     pub fn push<T: IntoValue>(&self, value: T) {
         let val = value.into_value();
@@ -193,13 +201,15 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.push(1);
-    /// arr.push(2);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().push(1);
+    /// arr.get().push(2);
     ///
-    /// let val = arr.pop().unwrap();
-    /// assert_eq!(arr.len(), 1);
+    /// let val = arr.get().pop().unwrap();
+    /// assert_eq!(arr.get().len(), 1);
     /// ```
     pub fn pop(&self) -> Option<Value> {
         if self.is_empty() {
@@ -224,14 +234,16 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.push(10);
-    /// arr.push(20);
-    /// arr.push(30);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().push(10);
+    /// arr.get().push(20);
+    /// arr.get().push(30);
     ///
-    /// let val = arr.entry(1);
-    /// let val_neg = arr.entry(-1); // Last element
+    /// let val = arr.get().entry(1);
+    /// let val_neg = arr.get().entry(-1); // Last element
     /// ```
     pub fn entry(&self, index: isize) -> Value {
         // SAFETY: self.0 is a valid Ruby array, rb_ary_entry handles bounds checking
@@ -249,11 +261,13 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.store(0, 42);
-    /// arr.store(1, "hello");
-    /// arr.store(-1, "world"); // Replaces last element
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().store(0, 42);
+    /// arr.get().store(1, "hello");
+    /// arr.get().store(-1, "world"); // Replaces last element
     /// ```
     pub fn store<T: IntoValue>(&self, index: isize, value: T) {
         let val = value.into_value();
@@ -281,14 +295,16 @@ impl RArray {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RArray;
     /// use solidus::convert::TryConvert;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.push(1);
-    /// arr.push(2);
-    /// arr.push(3);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().push(1);
+    /// arr.get().push(2);
+    /// arr.get().push(3);
     ///
     /// let mut sum = 0i64;
-    /// arr.each(|val| {
+    /// arr.get().each(|val| {
     ///     let n = i64::try_convert(val)?;
     ///     sum += n;
     ///     Ok(())
@@ -373,13 +389,15 @@ impl RArray {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RArray;
     /// use solidus::convert::TryConvert;
+    /// use solidus::pin_on_stack;
     ///
-    /// let arr = RArray::new();
-    /// arr.push(1);
-    /// arr.push(2);
-    /// arr.push(3);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(arr = unsafe { RArray::new() });
+    /// arr.get().push(1);
+    /// arr.get().push(2);
+    /// arr.get().push(3);
     ///
-    /// let vec: Vec<i64> = arr.to_vec()?;
+    /// let vec: Vec<i64> = arr.get().to_vec()?;
     /// assert_eq!(vec, vec![1, 2, 3]);
     /// # Ok(())
     /// # }

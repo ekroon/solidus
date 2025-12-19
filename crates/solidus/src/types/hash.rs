@@ -15,10 +15,12 @@ use crate::value::{BoxValue, NewValue, ReprValue, Value};
 ///
 /// ```no_run
 /// use solidus::types::RHash;
+/// use solidus::pin_on_stack;
 ///
-/// let hash = RHash::new();
-/// hash.insert("key", "value");
-/// assert_eq!(hash.len(), 1);
+/// // SAFETY: Value is immediately pinned
+/// pin_on_stack!(hash = unsafe { RHash::new() });
+/// hash.get().insert("key", "value");
+/// assert_eq!(hash.get().len(), 1);
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]
@@ -82,11 +84,13 @@ impl RHash {
     ///
     /// ```no_run
     /// use solidus::types::RHash;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// hash.insert("a", 1);
-    /// hash.insert("b", 2);
-    /// assert_eq!(hash.len(), 2);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// hash.get().insert("a", 1);
+    /// hash.get().insert("b", 2);
+    /// assert_eq!(hash.get().len(), 2);
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
@@ -100,12 +104,14 @@ impl RHash {
     ///
     /// ```no_run
     /// use solidus::types::RHash;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// assert!(hash.is_empty());
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// assert!(hash.get().is_empty());
     ///
-    /// hash.insert("key", "value");
-    /// assert!(!hash.is_empty());
+    /// hash.get().insert("key", "value");
+    /// assert!(!hash.get().is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -127,14 +133,16 @@ impl RHash {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use solidus::convert::TryConvert;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// hash.insert("key", 42i64);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// hash.get().insert("key", 42i64);
     ///
-    /// let val = hash.get("key").unwrap();
+    /// let val = hash.get().get("key").unwrap();
     /// assert_eq!(i64::try_convert(val)?, 42);
     ///
-    /// assert!(hash.get("missing").is_none());
+    /// assert!(hash.get().get("missing").is_none());
     /// # Ok(())
     /// # }
     /// ```
@@ -159,14 +167,16 @@ impl RHash {
     ///
     /// ```no_run
     /// use solidus::types::RHash;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// hash.insert("name", "Alice");
-    /// hash.insert("age", 30i64);
-    /// assert_eq!(hash.len(), 2);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// hash.get().insert("name", "Alice");
+    /// hash.get().insert("age", 30i64);
+    /// assert_eq!(hash.get().len(), 2);
     ///
-    /// hash.insert("age", 31i64); // Update existing key
-    /// assert_eq!(hash.len(), 2);
+    /// hash.get().insert("age", 31i64); // Update existing key
+    /// assert_eq!(hash.get().len(), 2);
     /// ```
     pub fn insert<K: IntoValue, V: IntoValue>(&self, key: K, value: V) {
         let key_val = key.into_value();
@@ -187,15 +197,17 @@ impl RHash {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use solidus::convert::TryConvert;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// hash.insert("key", 42i64);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// hash.get().insert("key", 42i64);
     ///
-    /// let val = hash.delete("key").unwrap();
+    /// let val = hash.get().delete("key").unwrap();
     /// assert_eq!(i64::try_convert(val)?, 42);
-    /// assert_eq!(hash.len(), 0);
+    /// assert_eq!(hash.get().len(), 0);
     ///
-    /// assert!(hash.delete("key").is_none());
+    /// assert!(hash.get().delete("key").is_none());
     /// # Ok(())
     /// # }
     /// ```
@@ -228,13 +240,15 @@ impl RHash {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use solidus::convert::TryConvert;
+    /// use solidus::pin_on_stack;
     ///
-    /// let hash = RHash::new();
-    /// hash.insert("a", 1i64);
-    /// hash.insert("b", 2i64);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// hash.get().insert("a", 1i64);
+    /// hash.get().insert("b", 2i64);
     ///
     /// let mut sum = 0i64;
-    /// hash.each(|key, val| {
+    /// hash.get().each(|key, val| {
     ///     let n = i64::try_convert(val)?;
     ///     sum += n;
     ///     Ok(())
@@ -305,13 +319,15 @@ impl RHash {
     /// ```no_run
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
+    /// use solidus::pin_on_stack;
     /// use std::collections::HashMap;
     ///
-    /// let hash = RHash::new();
-    /// hash.insert("a", 1i64);
-    /// hash.insert("b", 2i64);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(hash = unsafe { RHash::new() });
+    /// hash.get().insert("a", 1i64);
+    /// hash.get().insert("b", 2i64);
     ///
-    /// let map: HashMap<String, i64> = hash.to_hash_map()?;
+    /// let map: HashMap<String, i64> = hash.get().to_hash_map()?;
     /// assert_eq!(map.get("a"), Some(&1));
     /// assert_eq!(map.get("b"), Some(&2));
     /// # Ok(())

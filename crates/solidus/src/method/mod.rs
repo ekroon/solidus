@@ -303,13 +303,15 @@ macro_rules! method {
 ///
 /// // Arity 0 - no arguments
 /// fn greet() -> Result<NewValue<RString>, Error> {
-///     Ok(RString::new("Hello, World!"))
+///     // SAFETY: Value is immediately returned to Ruby
+///     Ok(unsafe { RString::new("Hello, World!") })
 /// }
 ///
 /// // Arity 1 - one argument
 /// fn greet_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 ///     // name is automatically pinned by the wrapper
-///     Ok(RString::new(&format!("Hello, {}!", name.get().to_string()?)))
+///     // SAFETY: Value is immediately returned to Ruby
+///     Ok(unsafe { RString::new(&format!("Hello, {}!", name.get().to_string()?)) })
 /// }
 ///
 /// // Register with Ruby

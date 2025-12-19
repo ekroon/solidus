@@ -239,7 +239,8 @@ pub trait Module: ReprValue {
     /// use solidus::method;
     ///
     /// fn my_method(rb_self: RString) -> Result<NewValue<RString>, Error> {
-    ///     Ok(RString::new("result"))
+    ///     // SAFETY: Value is immediately returned to Ruby
+    ///     Ok(unsafe { RString::new("result") })
     /// }
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {

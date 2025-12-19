@@ -24,22 +24,19 @@
 //! ## Creating Values
 //!
 //! When you create a Ruby value, you get a `NewValue<T>` that must be either:
-//! - Pinned on the stack with `.pin()` (common case)
+//! - Pinned on the stack with `pin_on_stack!` (common case)
 //! - Boxed for heap storage with `.into_box()` (explicit GC registration)
 //!
 //! ```no_run
 //! use solidus::prelude::*;
 //!
-//! // Creating a value returns a NewValue
-//! let guard = RString::new("hello");
-//!
 //! // Option 1: Pin on stack (fast, common case)
-//! pin_on_stack!(s = guard);
+//! // SAFETY: Value is immediately pinned
+//! pin_on_stack!(s = unsafe { RString::new("hello") });
 //! // s is Pin<&StackPinned<RString>>, cannot be moved to heap
 //!
 //! // Option 2: Box for heap storage (for collections)
-//! let guard = RArray::new();
-//! let boxed = guard.into_box();  // Explicit GC registration
+//! let boxed = RArray::new_boxed();  // Safe - immediately GC-registered
 //! let mut values = vec![boxed];  // Safe! GC knows about it
 //! ```
 //!
@@ -67,7 +64,8 @@
 //! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 //!     let self_str = rb_self.to_string()?;
 //!     let other_str = other.get().to_string()?;
-//!     Ok(RString::new(&format!("{}{}", self_str, other_str)))
+//!     // SAFETY: Value is immediately returned to Ruby
+//!     Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 //! }
 //!
 //! // Initialize the extension

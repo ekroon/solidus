@@ -26,7 +26,8 @@ use crate::value::Value;
 /// use solidus::method::ReturnValue;
 ///
 /// fn example() -> Result<NewValue<RString>, Error> {
-///     Ok(RString::new("hello"))
+///     // SAFETY: Value is immediately returned to Ruby
+///     Ok(unsafe { RString::new("hello") })
 /// }
 /// ```
 pub trait ReturnValue {

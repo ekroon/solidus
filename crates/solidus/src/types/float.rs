@@ -94,9 +94,11 @@ impl IntoValue for Flonum {
 ///
 /// ```no_run
 /// use solidus::types::RFloat;
+/// use solidus::pin_on_stack;
 ///
-/// let num = RFloat::from_f64(3.14159265358979);
-/// assert!((num.to_f64() - 3.14159265358979).abs() < 0.0001);
+/// // SAFETY: Value is immediately pinned
+/// pin_on_stack!(num = unsafe { RFloat::from_f64(3.14159265358979) });
+/// assert!((num.get().to_f64() - 3.14159265358979).abs() < 0.0001);
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]

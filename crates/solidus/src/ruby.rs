@@ -332,7 +332,8 @@ impl Ruby {
     /// use solidus::types::RString;
     ///
     /// fn greet() -> Result<NewValue<RString>, Error> {
-    ///     Ok(RString::new("Hello, World!"))
+    ///     // SAFETY: Value is immediately returned to Ruby
+    ///     Ok(unsafe { RString::new("Hello, World!") })
     /// }
     ///
     /// let ruby = unsafe { Ruby::get() };

@@ -139,9 +139,11 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello");
-    /// assert_eq!(s.len(), 5);
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("hello") });
+    /// assert_eq!(s.get().len(), 5);
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
@@ -155,12 +157,15 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("");
-    /// assert!(s.is_empty());
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("") });
+    /// assert!(s.get().is_empty());
     ///
-    /// let s2 = RString::new("hello");
-    /// assert!(!s2.is_empty());
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s2 = unsafe { RString::new("hello") });
+    /// assert!(!s2.get().is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -183,10 +188,12 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello");
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("hello") });
     /// unsafe {
-    ///     let bytes = s.as_slice();
+    ///     let bytes = s.get().as_slice();
     ///     assert_eq!(bytes, b"hello");
     /// }
     /// ```
@@ -207,9 +214,11 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello");
-    /// assert_eq!(s.to_string().unwrap(), "hello");
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("hello") });
+    /// assert_eq!(s.get().to_string().unwrap(), "hello");
     /// ```
     pub fn to_string(&self) -> Result<String, Error> {
         // SAFETY: We immediately copy the bytes, so they don't outlive the string
@@ -230,9 +239,11 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello");
-    /// assert_eq!(s.to_bytes(), b"hello");
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("hello") });
+    /// assert_eq!(s.get().to_bytes(), b"hello");
     /// ```
     pub fn to_bytes(&self) -> Vec<u8> {
         // SAFETY: We immediately copy the bytes, so they don't outlive the string
@@ -245,9 +256,11 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
     ///
-    /// let s = RString::new("hello");
-    /// let enc = s.encoding();
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("hello") });
+    /// let enc = s.get().encoding();
     /// ```
     pub fn encoding(&self) -> Encoding {
         // SAFETY: self.0 is a valid Ruby string VALUE
@@ -352,10 +365,12 @@ impl IntoValue for &str {
 ///
 /// ```no_run
 /// use solidus::types::{RString, Encoding};
+/// use solidus::pin_on_stack;
 ///
 /// let enc = Encoding::utf8();
-/// let s = RString::new("hello");
-/// let encoded = s.encode(enc).unwrap();
+/// // SAFETY: Value is immediately pinned
+/// pin_on_stack!(s = unsafe { RString::new("hello") });
+/// let encoded = s.get().encode(enc).unwrap();
 /// ```
 #[derive(Clone, Debug)]
 pub struct Encoding {

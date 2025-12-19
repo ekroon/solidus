@@ -42,14 +42,16 @@ use super::{BoxValue, ReprValue};
 /// use solidus::pin_on_stack;
 ///
 /// // Creating a Ruby string returns a NewValue
-/// let guard = RString::new("hello");
+/// // SAFETY: Value is immediately pinned
+/// let guard = unsafe { RString::new("hello") };
 ///
 /// // Option 1: Pin on stack (common case)
 /// pin_on_stack!(s = guard);
 /// // Now s is Pin<&StackPinned<RString>>
 ///
 /// // Option 2: Box for heap storage
-/// let guard = RString::new("world");
+/// // SAFETY: Value is immediately boxed and GC-registered
+/// let guard = unsafe { RString::new("world") };
 /// let boxed = guard.into_box();
 /// let mut strings = Vec::new();
 /// strings.push(boxed); // Safe - registered with GC
@@ -62,7 +64,9 @@ use super::{BoxValue, ReprValue};
 /// ```no_run
 /// use solidus::types::RString;
 ///
-/// let _ = RString::new("oops"); // Warning: VALUE must be pinned on stack or explicitly boxed
+/// // Warning: VALUE must be pinned on stack or explicitly boxed
+/// // SAFETY: The value is unused but this demonstrates the warning
+/// let _ = unsafe { RString::new("oops") };
 /// ```
 ///
 /// # Safety Design
@@ -73,7 +77,8 @@ use super::{BoxValue, ReprValue};
 /// use solidus::types::RString;
 /// use solidus::pin_on_stack;
 ///
-/// let guard = RString::new("hello");
+/// // SAFETY: Value is immediately pinned
+/// let guard = unsafe { RString::new("hello") };
 /// pin_on_stack!(stack_pinned = guard);
 /// // stack_pinned is now Pin<&StackPinned<RString>>
 /// ```
@@ -127,7 +132,8 @@ impl<T: ReprValue> NewValue<T> {
     /// ```no_run
     /// use solidus::{RString, BoxValue};
     ///
-    /// let guard = RString::new("hello");
+    /// // SAFETY: Value is immediately boxed and GC-registered
+    /// let guard = unsafe { RString::new("hello") };
     /// let boxed = guard.into_box();
     ///
     /// let mut strings: Vec<BoxValue<RString>> = Vec::new();
