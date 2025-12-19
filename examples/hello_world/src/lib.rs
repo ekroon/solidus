@@ -10,7 +10,8 @@ use solidus::prelude::*;
 /// A simple function that returns a greeting.
 #[solidus_macros::function]
 fn hello() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello from Solidus!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello from Solidus!") })
 }
 
 /// Initialize the Ruby extension.

@@ -15,7 +15,8 @@ use std::collections::HashMap;
 #[no_mangle]
 pub extern "C" fn example_hash_new() -> rb_sys::VALUE {
     // Create a new empty hash
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Check properties
     assert_eq!(hash.len(), 0);
@@ -29,7 +30,8 @@ pub extern "C" fn example_hash_new() -> rb_sys::VALUE {
 /// Shows how to insert elements into a hash.
 #[no_mangle]
 pub extern "C" fn example_hash_insert() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Insert string key with integer value
     hash.insert("name", "Alice");
@@ -48,7 +50,8 @@ pub extern "C" fn example_hash_insert() -> rb_sys::VALUE {
 /// Demonstrates retrieving values from a hash.
 #[no_mangle]
 pub extern "C" fn example_hash_get() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Insert some data
     hash.insert("x", 100i64);
@@ -76,7 +79,8 @@ pub extern "C" fn example_hash_get() -> rb_sys::VALUE {
 /// Shows that insert updates the value if the key exists.
 #[no_mangle]
 pub extern "C" fn example_hash_update() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Insert initial value
     hash.insert("counter", 1i64);
@@ -99,7 +103,8 @@ pub extern "C" fn example_hash_update() -> rb_sys::VALUE {
 /// Demonstrates removing key-value pairs from a hash.
 #[no_mangle]
 pub extern "C" fn example_hash_delete() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Insert data
     hash.insert("keep", 1i64);
@@ -128,7 +133,8 @@ pub extern "C" fn example_hash_delete() -> rb_sys::VALUE {
 /// Shows how to iterate over all key-value pairs.
 #[no_mangle]
 pub extern "C" fn example_hash_iteration() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Insert some data
     hash.insert("a", 1i64);
@@ -154,14 +160,15 @@ pub extern "C" fn example_hash_iteration() -> rb_sys::VALUE {
 /// Demonstrates hashes with symbol keys (common in Ruby).
 #[no_mangle]
 pub extern "C" fn example_hash_symbol_keys() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Use symbols as keys
     let name_key = Symbol::new("name");
     let age_key = Symbol::new("age");
 
-    hash.insert(name_key, "Bob");
-    hash.insert(age_key, 25i64);
+    hash.insert(name_key.clone(), "Bob");
+    hash.insert(age_key.clone(), 25i64);
 
     // Retrieve using symbols
     if let Some(val) = hash.get(name_key) {
@@ -182,7 +189,8 @@ pub extern "C" fn example_hash_symbol_keys() -> rb_sys::VALUE {
 /// Shows that hashes can use integers as keys.
 #[no_mangle]
 pub extern "C" fn example_hash_integer_keys() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Use integers as keys
     hash.insert(1i64, "first");
@@ -205,7 +213,8 @@ pub extern "C" fn example_hash_integer_keys() -> rb_sys::VALUE {
 /// Demonstrates that hashes can have different key types.
 #[no_mangle]
 pub extern "C" fn example_hash_mixed_keys() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Mix different key types
     hash.insert("string_key", 1i64);
@@ -234,7 +243,8 @@ pub extern "C" fn example_hash_from_hashmap() -> rb_sys::VALUE {
     map.insert("blue", 0i64);
 
     // Convert to Ruby hash
-    let hash = RHash::from_hash_map(map);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::from_hash_map(map) };
 
     assert_eq!(hash.len(), 3);
 
@@ -251,7 +261,8 @@ pub extern "C" fn example_hash_from_hashmap() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_hash_to_hashmap() -> rb_sys::VALUE {
     // Create Ruby hash
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
     hash.insert("width", 1920i64);
     hash.insert("height", 1080i64);
 
@@ -271,12 +282,14 @@ pub extern "C" fn example_hash_to_hashmap() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_hash_nested() -> rb_sys::VALUE {
     // Create inner hash
-    let inner = RHash::new();
+    // SAFETY: Value is used immediately
+    let inner = unsafe { RHash::new() };
     inner.insert("city", "Portland");
     inner.insert("state", "Oregon");
 
     // Create outer hash
-    let outer = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let outer = unsafe { RHash::new() };
     outer.insert("name", "Alice");
     outer.insert("location", inner);
 
@@ -299,8 +312,9 @@ pub extern "C" fn example_hash_nested() -> rb_sys::VALUE {
 /// Example 13: Type-safe hash operations
 ///
 /// Shows compile-time guarantees for hash operations.
-fn build_user_hash(name: &str, age: i64, active: bool) -> Result<RHash, Error> {
-    let hash = RHash::new();
+fn build_user_hash(name: &str, age: i64, active: bool) -> Result<NewValue<RHash>, Error> {
+    // SAFETY: Value is returned as part of a Result, caller handles it
+    let hash = unsafe { RHash::new() };
     hash.insert("name", name);
     hash.insert("age", age);
     hash.insert("active", active);
@@ -341,7 +355,8 @@ pub extern "C" fn example_hash_roundtrip() -> rb_sys::VALUE {
     original.insert("orange", 7i64);
 
     // Convert to Ruby hash
-    let ruby_hash = RHash::from_hash_map(original.clone());
+    // SAFETY: Value is used immediately and returned to Ruby
+    let ruby_hash = unsafe { RHash::from_hash_map(original.clone()) };
 
     // Convert back to Rust HashMap
     let roundtrip: HashMap<String, i64> = ruby_hash.to_hash_map().unwrap();
@@ -360,7 +375,8 @@ pub extern "C" fn example_hash_roundtrip() -> rb_sys::VALUE {
 /// Shows how to collect keys and values during iteration.
 #[no_mangle]
 pub extern "C" fn example_hash_collect_keys() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
     hash.insert("alpha", 1i64);
     hash.insert("beta", 2i64);
     hash.insert("gamma", 3i64);

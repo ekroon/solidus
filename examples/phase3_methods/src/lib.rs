@@ -23,7 +23,8 @@ use std::pin::Pin;
 /// Returns a greeting message
 fn greet(rb_self: RString) -> Result<NewValue<RString>, Error> {
     let name = rb_self.to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", name)) })
 }
 
 /// Instance method with arity 1 - self + one argument
@@ -65,14 +66,16 @@ fn always_fails(_rb_self: RString) -> Result<NewValue<RString>, Error> {
 /// Module function with arity 0
 /// Returns a constant string
 fn get_version() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("1.0.0"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("1.0.0") })
 }
 
 /// Module function with arity 1
 /// Converts a string to uppercase
 fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
-    Ok(RString::new(&input.to_uppercase()))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&input.to_uppercase()) })
 }
 
 /// Module function with arity 2
@@ -83,7 +86,8 @@ fn join_with(
 ) -> Result<NewValue<RString>, Error> {
     let str1 = s1.get().to_string()?;
     let str2 = s2.get().to_string()?;
-    Ok(RString::new(&format!("{} - {}", str1, str2)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{} - {}", str1, str2)) })
 }
 
 // ============================================================================
@@ -93,7 +97,8 @@ fn join_with(
 /// Class method (singleton method) with arity 0
 /// Returns a constant string representation of PI
 fn pi() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("3.14159"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("3.14159") })
 }
 
 /// Class method with arity 1
@@ -120,14 +125,16 @@ fn power(base: Pin<&StackPinned<RString>>, exponent: Pin<&StackPinned<RString>>)
 
 /// Class method that creates a new Calculator with a default name
 fn create_default() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Calculator"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Calculator") })
 }
 
 /// Class method with arity 1
 /// Creates a Calculator with a custom name
 fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let n = name.get().to_string()?;
-    Ok(RString::new(&format!("Calculator: {}", n)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Calculator: {}", n)) })
 }
 
 // ============================================================================
@@ -137,14 +144,16 @@ fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString
 /// Global function with arity 0
 /// Returns a greeting
 fn hello() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello from Solidus!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello from Solidus!") })
 }
 
 /// Global function with arity 1
 /// Repeats a string n times
 fn repeat_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
-    Ok(RString::new(&input.repeat(3)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&input.repeat(3)) })
 }
 
 /// Global function with arity 2
@@ -171,7 +180,8 @@ fn average_three(
     let num_c = c.get().to_string()?.parse::<f64>()
         .map_err(|_| Error::argument("third argument must be a number"))?;
     let avg = (num_a + num_b + num_c) / 3.0;
-    Ok(RString::new(&format!("{:.1}", avg)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{:.1}", avg)) })
 }
 
 // ============================================================================
@@ -182,16 +192,16 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     // ========================================================================
     // Define Calculator class and its methods
     // ========================================================================
-    
+
     let calc_class = ruby.define_class("Calculator", ruby.class_object());
     let calc_rclass = RClass::try_convert(calc_class)?;
-    
+
     // Instance methods using method! macro
     calc_rclass.clone().define_method("greet", solidus::method!(greet, 0), 0)?;
     calc_rclass.clone().define_method("add", solidus::method!(add, 1), 1)?;
     calc_rclass.clone().define_method("multiply_three", solidus::method!(multiply_three, 2), 2)?;
     calc_rclass.clone().define_method("always_fails", solidus::method!(always_fails, 0), 0)?;
-    
+
     // Class methods using function! macro and define_singleton_method
     calc_rclass.clone().define_singleton_method(
         "create_default",
@@ -203,14 +213,14 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
         solidus::function!(create_with_name, 1),
         1
     )?;
-    
+
     // ========================================================================
     // Define StringUtils module and its module functions
     // ========================================================================
-    
+
     let string_utils_module = ruby.define_module("StringUtils");
     let string_utils_rmodule = RModule::try_convert(string_utils_module)?;
-    
+
     // Module functions using function! macro and define_module_function
     // These can be called as StringUtils.method_name or via include
     string_utils_rmodule.clone().define_module_function(
@@ -228,14 +238,14 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
         solidus::function!(join_with, 2),
         2
     )?;
-    
+
     // ========================================================================
     // Define Math module with class methods
     // ========================================================================
-    
+
     let math_module = ruby.define_module("SolidusMath");
     let math_rmodule = RModule::try_convert(math_module)?;
-    
+
     // Singleton methods on the module (class methods)
     math_rmodule.clone().define_singleton_method(
         "pi",
@@ -252,16 +262,16 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
         solidus::function!(power, 2),
         2
     )?;
-    
+
     // ========================================================================
     // Define global functions
     // ========================================================================
-    
+
     ruby.define_global_function("hello", solidus::function!(hello, 0), 0)?;
     ruby.define_global_function("repeat_string", solidus::function!(repeat_string, 1), 1)?;
     ruby.define_global_function("add_numbers", solidus::function!(add_numbers, 2), 2)?;
     ruby.define_global_function("average_three", solidus::function!(average_three, 3), 3)?;
-    
+
     Ok(())
 }
 
@@ -270,10 +280,10 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
 pub unsafe extern "C" fn Init_phase3_methods() {
     // Mark this thread as the Ruby thread
     Ruby::mark_ruby_thread();
-    
+
     // Get the Ruby handle
     let ruby = Ruby::get();
-    
+
     // Call the init function and raise on error
     if let Err(e) = init_solidus(ruby) {
         e.raise();

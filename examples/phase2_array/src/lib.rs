@@ -13,7 +13,8 @@ use solidus::prelude::*;
 #[no_mangle]
 pub extern "C" fn example_array_new() -> rb_sys::VALUE {
     // Create a new empty array
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
 
     // Check basic properties
     assert_eq!(arr.len(), 0);
@@ -28,7 +29,8 @@ pub extern "C" fn example_array_new() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_array_with_capacity() -> rb_sys::VALUE {
     // Create an array with pre-allocated capacity
-    let arr = RArray::with_capacity(100);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::with_capacity(100) };
 
     // Still empty, but has space for 100 elements
     assert_eq!(arr.len(), 0);
@@ -49,7 +51,8 @@ pub extern "C" fn example_array_with_capacity() -> rb_sys::VALUE {
 /// Demonstrates stack operations on arrays.
 #[no_mangle]
 pub extern "C" fn example_array_push_pop() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
 
     // Push some elements
     arr.push(10i64);
@@ -84,7 +87,8 @@ pub extern "C" fn example_array_push_pop() -> rb_sys::VALUE {
 /// Shows positive and negative indexing.
 #[no_mangle]
 pub extern "C" fn example_array_entry() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
     arr.push(100i64);
     arr.push(200i64);
     arr.push(300i64);
@@ -123,7 +127,8 @@ pub extern "C" fn example_array_entry() -> rb_sys::VALUE {
 /// Demonstrates modifying array elements.
 #[no_mangle]
 pub extern "C" fn example_array_store() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
 
     // Store at index 0
     arr.store(0, 42i64);
@@ -162,7 +167,8 @@ pub extern "C" fn example_array_store() -> rb_sys::VALUE {
 /// Shows closure-based iteration over array elements.
 #[no_mangle]
 pub extern "C" fn example_array_each() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
 
     // Add some numbers
     for i in 1..=10 {
@@ -200,7 +206,8 @@ pub extern "C" fn example_array_each() -> rb_sys::VALUE {
 pub extern "C" fn example_array_from_slice() -> rb_sys::VALUE {
     // Create array from integer slice
     let numbers = &[1i64, 2, 3, 4, 5];
-    let arr = RArray::from_slice(numbers);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::from_slice(numbers) };
 
     assert_eq!(arr.len(), 5);
 
@@ -219,7 +226,8 @@ pub extern "C" fn example_array_from_slice() -> rb_sys::VALUE {
 /// Shows type-safe conversion from Ruby arrays to Rust vectors.
 #[no_mangle]
 pub extern "C" fn example_array_to_vec() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
     arr.push(10i64);
     arr.push(20i64);
     arr.push(30i64);
@@ -247,11 +255,13 @@ pub extern "C" fn example_array_to_vec() -> rb_sys::VALUE {
 /// Demonstrates heterogeneous arrays with different Ruby types.
 #[no_mangle]
 pub extern "C" fn example_array_mixed_types() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
 
     // Ruby arrays can hold different types
     arr.push(42i64);
-    arr.push(RString::new("hello"));
+    // SAFETY: Value is used immediately
+    arr.push(unsafe { RString::new("hello") });
     arr.push(true);
     arr.push(2.5f64);
 
@@ -281,10 +291,11 @@ pub extern "C" fn example_array_mixed_types() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_typed_array() -> rb_sys::VALUE {
     // Create an array of strings
-    let arr = RArray::new();
-    arr.push(RString::new("apple"));
-    arr.push(RString::new("banana"));
-    arr.push(RString::new("cherry"));
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
+    arr.push(unsafe { RString::new("apple") });
+    arr.push(unsafe { RString::new("banana") });
+    arr.push(unsafe { RString::new("cherry") });
 
     // Convert to Vec<String> with type checking
     let mut strings = Vec::new();
@@ -306,11 +317,12 @@ pub extern "C" fn example_typed_array() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_nested_arrays() -> rb_sys::VALUE {
     // Create a 2D array (array of arrays)
-    let row1 = RArray::from_slice(&[1i64, 2, 3]);
-    let row2 = RArray::from_slice(&[4i64, 5, 6]);
-    let row3 = RArray::from_slice(&[7i64, 8, 9]);
+    // SAFETY: Values are used immediately and returned to Ruby
+    let row1 = unsafe { RArray::from_slice(&[1i64, 2, 3]) };
+    let row2 = unsafe { RArray::from_slice(&[4i64, 5, 6]) };
+    let row3 = unsafe { RArray::from_slice(&[7i64, 8, 9]) };
 
-    let matrix = RArray::new();
+    let matrix = unsafe { RArray::new() };
     matrix.push(row1);
     matrix.push(row2);
     matrix.push(row3);
@@ -337,10 +349,11 @@ pub extern "C" fn example_nested_arrays() -> rb_sys::VALUE {
 /// Shows proper error handling when converting array elements.
 #[no_mangle]
 pub extern "C" fn example_array_error_handling() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
     arr.push(1i64);
     arr.push(2i64);
-    arr.push(RString::new("not a number")); // Type mismatch
+    arr.push(unsafe { RString::new("not a number") }); // Type mismatch
     arr.push(4i64);
 
     // Try to convert to Vec<i64> - will fail at the string

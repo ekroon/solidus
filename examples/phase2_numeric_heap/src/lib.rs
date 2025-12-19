@@ -144,7 +144,8 @@ pub extern "C" fn example_large_arithmetic() -> rb_sys::VALUE {
 pub extern "C" fn example_rfloat() -> rb_sys::VALUE {
     // Create a heap-allocated float
     let pi = std::f64::consts::PI;
-    let float = RFloat::from_f64(pi);
+    // SAFETY: Value is immediately returned to Ruby
+    let float = unsafe { RFloat::from_f64(pi) };
     
     // Get the value back
     let value = float.to_f64();
@@ -198,18 +199,18 @@ pub extern "C" fn example_float_conversion(val: rb_sys::VALUE) -> rb_sys::VALUE 
 pub extern "C" fn example_integer_overflow() -> rb_sys::VALUE {
     // Create a large integer
     let large = Integer::from_i64(i64::MAX);
-    
+
     // Try to convert to smaller types with range checking
     // i32 conversion will fail for large values
-    let val = large.into_value();
-    
+    let val = large.clone().into_value();
+
     // This would return an error for i64::MAX
-    if i32::try_convert(val).is_err() {
+    if i32::try_convert(val.clone()).is_err() {
         // As expected, doesn't fit in i32
         // Return the original large value
         return large.into_value().as_raw();
     }
-    
+
     // If it somehow fit, return that
     val.as_raw()
 }
@@ -294,16 +295,16 @@ mod tests {
     fn test_compile_time_checks() {
         // These tests verify compile-time behavior only
         // Tests requiring Ruby API calls need the Ruby runtime
-        
-        // Verify numeric types are Copy
-        fn assert_copy<T: Copy>() {}
-        assert_copy::<Integer>();
-        assert_copy::<Float>();
-        assert_copy::<RBignum>();
-        assert_copy::<RFloat>();
-        
+
+        // Verify numeric types are Clone
+        fn assert_clone<T: Clone>() {}
+        assert_clone::<Integer>();
+        assert_clone::<Float>();
+        assert_clone::<RBignum>();
+        assert_clone::<RFloat>();
+
         #[cfg(target_pointer_width = "64")]
-        assert_copy::<Flonum>();
+        assert_clone::<Flonum>();
     }
     
     #[test]

@@ -47,7 +47,8 @@
 //! fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 //!     // Access the inner value with .get()
 //!     let s = arg.get().to_string()?;
-//!     Ok(RString::new(&format!("Got: {}", s)))
+//!     // SAFETY: Value is immediately returned to Ruby
+//!     Ok(unsafe { RString::new(&format!("Got: {}", s)) })
 //! }
 //! ```
 //!
@@ -74,7 +75,8 @@ use std::pin::Pin;
 /// Global function with no arguments.
 #[solidus_macros::function]
 fn get_greeting() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello from attribute macros!"))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new("Hello from attribute macros!") })
 }
 
 /// Global function with automatic pinning via macro wrapper.
@@ -82,7 +84,8 @@ fn get_greeting() -> Result<NewValue<RString>, Error> {
 #[solidus_macros::function]
 fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let name_str = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
 }
 
 /// Global function with two arguments, both automatically pinned.
@@ -90,7 +93,8 @@ fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 fn join_strings(first: Pin<&StackPinned<RString>>, second: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let a = first.get().to_string()?;
     let b = second.get().to_string()?;
-    Ok(RString::new(&format!("{} {}", a, b)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{} {}", a, b)) })
 }
 
 /// Instance method with no extra arguments (just self).
@@ -106,7 +110,8 @@ fn length(rb_self: RString) -> Result<i64, Error> {
 fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 }
 
 /// Instance method with two automatically pinned arguments.
@@ -115,7 +120,8 @@ fn surround(rb_self: RString, prefix: Pin<&StackPinned<RString>>, suffix: Pin<&S
     let p = prefix.get().to_string()?;
     let s = rb_self.to_string()?;
     let x = suffix.get().to_string()?;
-    Ok(RString::new(&format!("{}{}{}", p, s, x)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}{}", p, s, x)) })
 }
 
 // ============================================================================
@@ -130,14 +136,16 @@ fn concat_explicit(
 ) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, other_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
 }
 
 /// Global function - same Pin<&StackPinned<T>> signature style.
 #[solidus_macros::function]
 fn uppercase_explicit(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
-    Ok(RString::new(&input.to_uppercase()))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&input.to_uppercase()) })
 }
 
 // ============================================================================
@@ -152,7 +160,8 @@ fn format_mixed(
 ) -> Result<NewValue<RString>, Error> {
     let a = explicit_arg.get().to_string()?;
     let b = implicit_arg.get().to_string()?;
-    Ok(RString::new(&format!("[{}] -> [{}]", a, b)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("[{}] -> [{}]", a, b)) })
 }
 
 /// Method demonstrating pinned argument with self.
@@ -163,7 +172,8 @@ fn combine_mixed(
 ) -> Result<NewValue<RString>, Error> {
     let s = rb_self.to_string()?;
     let e = explicit_arg.get().to_string()?;
-    Ok(RString::new(&format!("{}+{}", s, e)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}+{}", s, e)) })
 }
 
 // ============================================================================
@@ -174,7 +184,8 @@ fn combine_mixed(
 #[solidus_macros::function]
 fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
-    Ok(RString::new(&input.to_uppercase()))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&input.to_uppercase()) })
 }
 
 /// Module function to reverse a string.
@@ -182,7 +193,8 @@ fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 fn reverse(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let input = s.get().to_string()?;
     let reversed: String = input.chars().rev().collect();
-    Ok(RString::new(&reversed))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&reversed) })
 }
 
 /// Module function with two args.
@@ -190,7 +202,8 @@ fn reverse(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
 fn repeat_join(text: Pin<&StackPinned<RString>>, separator: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let t = text.get().to_string()?;
     let sep = separator.get().to_string()?;
-    Ok(RString::new(&format!("{}{}{}{}{}", t, sep, t, sep, t)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}{}{}{}", t, sep, t, sep, t)) })
 }
 
 // ============================================================================

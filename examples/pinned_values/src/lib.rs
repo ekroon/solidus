@@ -35,7 +35,8 @@ use std::pin::Pin;
 fn process_pinned_string(input: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let content = input.get().to_string()?;
     let processed = content.to_uppercase();
-    Ok(RString::new(&format!("Processed: {}", processed)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("Processed: {}", processed)) })
 }
 
 /// Function with multiple pinned arguments.
@@ -47,7 +48,8 @@ fn concatenate_pinned(
 ) -> Result<NewValue<RString>, Error> {
     let s1 = first.get().to_string()?;
     let s2 = second.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", s1, s2)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", s1, s2)) })
 }
 
 /// Instance method example - uses `self` as first argument.
@@ -59,7 +61,8 @@ fn append_to_self(
 ) -> Result<NewValue<RString>, Error> {
     let self_str = rb_self.to_string()?;
     let suffix_str = suffix.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, suffix_str)))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&format!("{}{}", self_str, suffix_str)) })
 }
 
 // ============================================================================
@@ -77,8 +80,9 @@ fn append_to_self(
 /// - Keeping values alive across async boundaries
 fn create_boxed_string(content: Pin<&StackPinned<RString>>) -> Result<BoxValue<RString>, Error> {
     let text = content.get().to_string()?;
-    let guard = RString::new(&format!("Boxed: {}", text));
-    Ok(guard.into_box())
+    // SAFETY: Value is immediately boxed for heap storage
+    let new_val = unsafe { RString::new(&format!("Boxed: {}", text)) };
+    Ok(new_val.into_box())
 }
 
 // ============================================================================
@@ -117,7 +121,8 @@ impl StringCollector {
 
     /// Convert to a Ruby array.
     fn to_ruby_array(&self) -> Result<NewValue<RArray>, Error> {
-        let array = RArray::new();
+        // SAFETY: Value is immediately returned to Ruby
+        let array = unsafe { RArray::new() };
         for s in &self.strings {
             // Get the RString from BoxValue and push it to the array
             // RString implements IntoValue, so we can push it directly
@@ -191,7 +196,8 @@ fn ruby_collector_count() -> Result<i64, Error> {
 fn ruby_collector_join(sep: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
     let sep_str = sep.get().to_string()?;
     let joined = get_collector().join(&sep_str)?;
-    Ok(RString::new(&joined))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&joined) })
 }
 
 /// Global function: get collected strings as Ruby array
@@ -213,11 +219,11 @@ fn ruby_collector_clear() -> Result<i64, Error> {
 /// remain valid because they're properly pinned on the stack.
 fn ruby_demo_stack_pinning() -> Result<NewValue<RString>, Error> {
     // Each value is pinned on the stack - GC can see all of them
-    pin_on_stack!(s1 = RString::new("Stack"));
-    pin_on_stack!(s2 = RString::new("pinning"));
-    pin_on_stack!(s3 = RString::new("keeps"));
-    pin_on_stack!(s4 = RString::new("values"));
-    pin_on_stack!(s5 = RString::new("safe!"));
+    pin_on_stack!(s1 = unsafe { RString::new("Stack") });
+    pin_on_stack!(s2 = unsafe { RString::new("pinning") });
+    pin_on_stack!(s3 = unsafe { RString::new("keeps") });
+    pin_on_stack!(s4 = unsafe { RString::new("values") });
+    pin_on_stack!(s5 = unsafe { RString::new("safe!") });
 
     // All five values are visible to the GC during this call
     // Even if GC runs, none of these will be collected
@@ -230,7 +236,8 @@ fn ruby_demo_stack_pinning() -> Result<NewValue<RString>, Error> {
         s5.get().to_string()?,
     );
 
-    Ok(RString::new(&result))
+    // SAFETY: Value is immediately returned to Ruby
+    Ok(unsafe { RString::new(&result) })
 }
 
 /// Global function: demonstrate heap boxing for collections
@@ -239,14 +246,15 @@ fn ruby_demo_heap_boxing() -> Result<NewValue<RArray>, Error> {
     let mut boxed_values: Vec<BoxValue<RString>> = Vec::new();
 
     // Each value is boxed with GC registration
-    boxed_values.push(RString::new("These").into_box());
-    boxed_values.push(RString::new("are").into_box());
-    boxed_values.push(RString::new("heap").into_box());
-    boxed_values.push(RString::new("stored").into_box());
-    boxed_values.push(RString::new("safely!").into_box());
+    boxed_values.push(RString::new_boxed("These"));
+    boxed_values.push(RString::new_boxed("are"));
+    boxed_values.push(RString::new_boxed("heap"));
+    boxed_values.push(RString::new_boxed("stored"));
+    boxed_values.push(RString::new_boxed("safely!"));
 
     // All values remain valid because BoxValue registers with GC
-    let array = RArray::new();
+    // SAFETY: Value is immediately returned to Ruby
+    let array = unsafe { RArray::new() };
     for boxed in &boxed_values {
         // Get the RString from BoxValue and push it to the array
         // RString implements IntoValue, so we can push it directly

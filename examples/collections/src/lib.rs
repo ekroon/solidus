@@ -21,7 +21,8 @@ use solidus::prelude::*;
 /// Demonstrates creating an empty array and populating it with push().
 #[no_mangle]
 pub extern "C" fn build_array() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
 
     // Add elements one by one
     arr.push(10i64);
@@ -40,7 +41,8 @@ pub extern "C" fn build_array() -> rb_sys::VALUE {
 /// Shows closure-based iteration to sum array elements.
 #[no_mangle]
 pub extern "C" fn iterate_array_sum() -> rb_sys::VALUE {
-    let arr = RArray::from_slice(&[1i64, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::from_slice(&[1i64, 2, 3, 4, 5, 6, 7, 8, 9, 10]) };
 
     // Sum all elements using each()
     let mut sum = 0i64;
@@ -62,10 +64,12 @@ pub extern "C" fn iterate_array_sum() -> rb_sys::VALUE {
 /// Demonstrates building a new array with only elements matching a condition.
 #[no_mangle]
 pub extern "C" fn filter_array_even() -> rb_sys::VALUE {
-    let arr = RArray::from_slice(&[1i64, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::from_slice(&[1i64, 2, 3, 4, 5, 6, 7, 8, 9, 10]) };
 
     // Create a new array with only even numbers
-    let evens = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let evens = unsafe { RArray::new() };
     arr.each(|val| {
         let n = i64::try_convert(val)?;
         if n % 2 == 0 {
@@ -93,7 +97,8 @@ pub extern "C" fn vec_to_array() -> rb_sys::VALUE {
     let numbers: Vec<i64> = vec![100, 200, 300, 400, 500];
 
     // Convert to Ruby array using from_slice
-    let arr = RArray::from_slice(&numbers);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::from_slice(&numbers) };
 
     assert_eq!(arr.len(), 5);
 
@@ -111,7 +116,8 @@ pub extern "C" fn vec_to_array() -> rb_sys::VALUE {
 /// Shows type-safe conversion from Ruby array to Rust vector.
 #[no_mangle]
 pub extern "C" fn array_to_vec() -> rb_sys::VALUE {
-    let arr = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::new() };
     arr.push(11i64);
     arr.push(22i64);
     arr.push(33i64);
@@ -138,10 +144,12 @@ pub extern "C" fn array_to_vec() -> rb_sys::VALUE {
 /// Demonstrates creating a new array with transformed elements.
 #[no_mangle]
 pub extern "C" fn map_array_double() -> rb_sys::VALUE {
-    let arr = RArray::from_slice(&[1i64, 2, 3, 4, 5]);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::from_slice(&[1i64, 2, 3, 4, 5]) };
 
     // Create a new array with doubled values
-    let doubled = RArray::with_capacity(arr.len());
+    // SAFETY: Value is used immediately and returned to Ruby
+    let doubled = unsafe { RArray::with_capacity(arr.len()) };
     arr.each(|val| {
         let n = i64::try_convert(val)?;
         doubled.push(n * 2);
@@ -166,7 +174,8 @@ pub extern "C" fn map_array_double() -> rb_sys::VALUE {
 /// Demonstrates creating an empty hash and populating it with insert().
 #[no_mangle]
 pub extern "C" fn build_hash() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
 
     // Add key-value pairs
     hash.insert("name", "Alice");
@@ -184,7 +193,8 @@ pub extern "C" fn build_hash() -> rb_sys::VALUE {
 /// Shows closure-based iteration over key-value pairs.
 #[no_mangle]
 pub extern "C" fn iterate_hash_entries() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
     hash.insert("a", 10i64);
     hash.insert("b", 20i64);
     hash.insert("c", 30i64);
@@ -228,7 +238,8 @@ pub extern "C" fn hashmap_to_rhash() -> rb_sys::VALUE {
     map.insert("fps", 60i64);
 
     // Convert to Ruby hash
-    let hash = RHash::from_hash_map(map);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::from_hash_map(map) };
 
     assert_eq!(hash.len(), 3);
 
@@ -249,7 +260,8 @@ pub extern "C" fn hashmap_to_rhash() -> rb_sys::VALUE {
 /// Shows type-safe conversion from Ruby Hash to Rust HashMap.
 #[no_mangle]
 pub extern "C" fn rhash_to_hashmap() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
     hash.insert("red", 255i64);
     hash.insert("green", 128i64);
     hash.insert("blue", 64i64);
@@ -274,14 +286,16 @@ pub extern "C" fn rhash_to_hashmap() -> rb_sys::VALUE {
 /// Demonstrates building a new hash with only entries matching a condition.
 #[no_mangle]
 pub extern "C" fn filter_hash_by_value() -> rb_sys::VALUE {
-    let hash = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::new() };
     hash.insert("small", 5i64);
     hash.insert("medium", 15i64);
     hash.insert("large", 25i64);
     hash.insert("tiny", 1i64);
 
     // Create a new hash with values > 10
-    let filtered = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let filtered = unsafe { RHash::new() };
     hash.each(|key, val| {
         let n = i64::try_convert(val.clone())?;
         if n > 10 {
@@ -309,18 +323,20 @@ pub extern "C" fn filter_hash_by_value() -> rb_sys::VALUE {
 /// Demonstrates storing hashes in an array (common data structure pattern).
 #[no_mangle]
 pub extern "C" fn array_of_hashes() -> rb_sys::VALUE {
-    let users = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let users = unsafe { RArray::new() };
 
     // Create user records as hashes
-    let user1 = RHash::new();
+    // SAFETY: Value is used immediately
+    let user1 = unsafe { RHash::new() };
     user1.insert("name", "Alice");
     user1.insert("age", 30i64);
 
-    let user2 = RHash::new();
+    let user2 = unsafe { RHash::new() };
     user2.insert("name", "Bob");
     user2.insert("age", 25i64);
 
-    let user3 = RHash::new();
+    let user3 = unsafe { RHash::new() };
     user3.insert("name", "Charlie");
     user3.insert("age", 35i64);
 
@@ -344,12 +360,14 @@ pub extern "C" fn array_of_hashes() -> rb_sys::VALUE {
 /// Demonstrates storing arrays as hash values.
 #[no_mangle]
 pub extern "C" fn hash_with_array_values() -> rb_sys::VALUE {
-    let data = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let data = unsafe { RHash::new() };
 
     // Create arrays for each category
-    let fruits = RArray::from_slice(&["apple", "banana", "cherry"]);
-    let vegetables = RArray::from_slice(&["carrot", "broccoli", "spinach"]);
-    let grains = RArray::from_slice(&["rice", "wheat"]);
+    // SAFETY: Value is used immediately
+    let fruits = unsafe { RArray::from_slice(&["apple", "banana", "cherry"]) };
+    let vegetables = unsafe { RArray::from_slice(&["carrot", "broccoli", "spinach"]) };
+    let grains = unsafe { RArray::from_slice(&["rice", "wheat"]) };
 
     data.insert("fruits", fruits);
     data.insert("vegetables", vegetables);
@@ -373,10 +391,12 @@ pub extern "C" fn hash_with_array_values() -> rb_sys::VALUE {
 /// Demonstrates a common pattern: grouping items by a computed key.
 #[no_mangle]
 pub extern "C" fn group_by_length() -> rb_sys::VALUE {
-    let words = RArray::from_slice(&["a", "to", "the", "be", "cat", "word", "hello"]);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let words = unsafe { RArray::from_slice(&["a", "to", "the", "be", "cat", "word", "hello"]) };
 
     // Group words by their length
-    let grouped = RHash::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let grouped = unsafe { RHash::new() };
 
     words
         .each(|val| {
@@ -418,13 +438,15 @@ pub extern "C" fn group_by_length() -> rb_sys::VALUE {
 /// Demonstrates combining nested arrays from hash values.
 #[no_mangle]
 pub extern "C" fn flatten_hash_arrays() -> rb_sys::VALUE {
-    let data = RHash::new();
-    data.insert("a", RArray::from_slice(&[1i64, 2]));
-    data.insert("b", RArray::from_slice(&[3i64, 4, 5]));
-    data.insert("c", RArray::from_slice(&[6i64]));
+    // SAFETY: Value is used immediately and returned to Ruby
+    let data = unsafe { RHash::new() };
+    data.insert("a", unsafe { RArray::from_slice(&[1i64, 2]) });
+    data.insert("b", unsafe { RArray::from_slice(&[3i64, 4, 5]) });
+    data.insert("c", unsafe { RArray::from_slice(&[6i64]) });
 
     // Flatten all arrays into one
-    let flattened = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let flattened = unsafe { RArray::new() };
     data.each(|_key, val| {
         let arr = RArray::try_convert(val)?;
         arr.each(|item| {
@@ -458,7 +480,8 @@ pub extern "C" fn roundtrip_vec() -> rb_sys::VALUE {
     let original = vec![10i64, 20, 30, 40, 50];
 
     // Convert to Ruby array
-    let arr = RArray::from_slice(&original);
+    // SAFETY: Value is used immediately and returned to Ruby
+    let arr = unsafe { RArray::from_slice(&original) };
 
     // Convert back to Rust Vec
     let roundtrip: Vec<i64> = arr.to_vec().unwrap();
@@ -481,7 +504,8 @@ pub extern "C" fn roundtrip_hashmap() -> rb_sys::VALUE {
     original.insert("three", 3i64);
 
     // Convert to Ruby hash
-    let hash = RHash::from_hash_map(original.clone());
+    // SAFETY: Value is used immediately and returned to Ruby
+    let hash = unsafe { RHash::from_hash_map(original.clone()) };
 
     // Convert back to Rust HashMap
     let roundtrip: HashMap<String, i64> = hash.to_hash_map().unwrap();

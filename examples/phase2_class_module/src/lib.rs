@@ -83,7 +83,7 @@ pub extern "C" fn example_superclass_chain() -> rb_sys::VALUE {
     assert_eq!(basic_object.name().unwrap(), "BasicObject");
 
     // BasicObject has no superclass
-    assert!(basic_object.superclass().is_none());
+    assert!(basic_object.clone().superclass().is_none());
 
     // Return the BasicObject class
     basic_object.into_value().as_raw()
@@ -95,7 +95,8 @@ pub extern "C" fn example_superclass_chain() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_iterate_superclasses() -> rb_sys::VALUE {
     // Create an array to store the class hierarchy
-    let result = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let result = unsafe { RArray::new() };
 
     // Start with Integer class
     let mut current_class = Some(RClass::from_name("Integer").unwrap());
@@ -103,7 +104,8 @@ pub extern "C" fn example_iterate_superclasses() -> rb_sys::VALUE {
     // Walk up the chain
     while let Some(class) = current_class {
         if let Some(name) = class.name() {
-            result.push(RString::new(&name));
+            // SAFETY: Value is used immediately
+            result.push(unsafe { RString::new(&name) });
         }
         current_class = class.superclass();
     }
@@ -203,7 +205,7 @@ pub extern "C" fn example_builtin_constants() -> rb_sys::VALUE {
 
     // File::SEPARATOR is a built-in constant
     let separator = file_class.const_get("SEPARATOR").unwrap();
-    let sep_str = RString::try_convert(separator).unwrap();
+    let sep_str = RString::try_convert(separator.clone()).unwrap();
 
     // On Unix-like systems it's "/", on Windows it's "\\"
     let sep = sep_str.to_string().unwrap();
@@ -225,10 +227,10 @@ fn define_constant_generic<T: Module>(container: T, name: &str, value: i64) -> R
 pub extern "C" fn example_module_trait_polymorphism() -> rb_sys::VALUE {
     // Use the same function for both class and module
     let string_class = RClass::from_name("String").unwrap();
-    define_constant_generic(string_class, "POLY_TEST_CLASS", 100).unwrap();
+    define_constant_generic(string_class.clone(), "POLY_TEST_CLASS", 100).unwrap();
 
     let enumerable = RModule::from_name("Enumerable").unwrap();
-    define_constant_generic(enumerable, "POLY_TEST_MODULE", 200).unwrap();
+    define_constant_generic(enumerable.clone(), "POLY_TEST_MODULE", 200).unwrap();
 
     // Verify both constants were set
     let class_const = string_class.const_get("POLY_TEST_CLASS").unwrap();
@@ -253,17 +255,20 @@ pub extern "C" fn example_value_to_class(val: rb_sys::VALUE) -> rb_sys::VALUE {
             // Successfully converted to class
             if let Some(name) = class.name() {
                 // Return a string with the class name
-                let result = RString::new(&format!("Got class: {}", name));
+                // SAFETY: Value is immediately returned to Ruby
+                let result = unsafe { RString::new(&format!("Got class: {}", name)) };
                 result.into_value().as_raw()
             } else {
                 // Anonymous class
-                let result = RString::new("Got anonymous class");
+                // SAFETY: Value is immediately returned to Ruby
+                let result = unsafe { RString::new("Got anonymous class") };
                 result.into_value().as_raw()
             }
         }
         Err(_) => {
             // Not a class
-            let result = RString::new("Not a class");
+            // SAFETY: Value is immediately returned to Ruby
+            let result = unsafe { RString::new("Not a class") };
             result.into_value().as_raw()
         }
     }
@@ -282,17 +287,20 @@ pub extern "C" fn example_value_to_module(val: rb_sys::VALUE) -> rb_sys::VALUE {
             // Successfully converted to module
             if let Some(name) = module.name() {
                 // Return a string with the module name
-                let result = RString::new(&format!("Got module: {}", name));
+                // SAFETY: Value is immediately returned to Ruby
+                let result = unsafe { RString::new(&format!("Got module: {}", name)) };
                 result.into_value().as_raw()
             } else {
                 // Anonymous module
-                let result = RString::new("Got anonymous module");
+                // SAFETY: Value is immediately returned to Ruby
+                let result = unsafe { RString::new("Got anonymous module") };
                 result.into_value().as_raw()
             }
         }
         Err(_) => {
             // Not a module
-            let result = RString::new("Not a module");
+            // SAFETY: Value is immediately returned to Ruby
+            let result = unsafe { RString::new("Not a module") };
             result.into_value().as_raw()
         }
     }
@@ -311,13 +319,15 @@ pub extern "C" fn example_const_error_handling() -> rb_sys::VALUE {
     match result {
         Ok(_) => {
             // This shouldn't happen
-            let msg = RString::new("ERROR: Found nonexistent constant!");
+            // SAFETY: Value is immediately returned to Ruby
+            let msg = unsafe { RString::new("ERROR: Found nonexistent constant!") };
             msg.into_value().as_raw()
         }
         Err(err) => {
             // Expected error
             let msg = format!("Expected error: {}", err);
-            let result = RString::new(&msg);
+            // SAFETY: Value is immediately returned to Ruby
+            let result = unsafe { RString::new(&msg) };
             result.into_value().as_raw()
         }
     }
@@ -333,7 +343,7 @@ pub extern "C" fn example_type_safety() -> rb_sys::VALUE {
     let string_value = string_class.into_value();
 
     // This succeeds because it's a class
-    assert!(RClass::try_convert(string_value).is_ok());
+    assert!(RClass::try_convert(string_value.clone()).is_ok());
 
     // This fails because String is a class, not a module
     assert!(RModule::try_convert(string_value).is_err());
@@ -343,7 +353,7 @@ pub extern "C" fn example_type_safety() -> rb_sys::VALUE {
     let enum_value = enumerable.into_value();
 
     // This succeeds because it's a module
-    assert!(RModule::try_convert(enum_value).is_ok());
+    assert!(RModule::try_convert(enum_value.clone()).is_ok());
 
     // This fails because Enumerable is a module, not a class
     assert!(RClass::try_convert(enum_value).is_err());
@@ -357,20 +367,23 @@ pub extern "C" fn example_type_safety() -> rb_sys::VALUE {
 #[no_mangle]
 pub extern "C" fn example_complex_hierarchy() -> rb_sys::VALUE {
     // Create an array to store class information
-    let result = RArray::new();
+    // SAFETY: Value is used immediately and returned to Ruby
+    let result = unsafe { RArray::new() };
 
     // Get File::Stat class (nested class)
     // Note: We use :: syntax for nested classes
     if let Some(file_stat) = RClass::from_name("File::Stat") {
         if let Some(name) = file_stat.name() {
-            result.push(RString::new(&name));
+            // SAFETY: Value is used immediately
+            result.push(unsafe { RString::new(&name) });
         }
 
         // Walk its superclass chain
         let mut current = file_stat.superclass();
         while let Some(class) = current {
             if let Some(name) = class.name() {
-                result.push(RString::new(&name));
+                // SAFETY: Value is used immediately
+                result.push(unsafe { RString::new(&name) });
             }
             current = class.superclass();
         }
@@ -381,26 +394,26 @@ pub extern "C" fn example_complex_hierarchy() -> rb_sys::VALUE {
 
 /// Example 15: Copying and working with class values
 ///
-/// Shows that RClass and RModule are Copy types that can be freely duplicated.
+/// Shows that RClass and RModule are Clone types that can be duplicated.
 #[no_mangle]
 pub extern "C" fn example_class_copy_semantics() -> rb_sys::VALUE {
-    // RClass is Copy, so we can pass it around freely
+    // RClass is Clone, so we can clone it
     let string_class = RClass::from_name("String").unwrap();
 
-    // These are all copies, not moves
-    let class1 = string_class;
-    let class2 = string_class;
-    let class3 = string_class;
+    // These are all clones
+    let class1 = string_class.clone();
+    let class2 = string_class.clone();
+    let class3 = string_class.clone();
 
     // All refer to the same Ruby class
     assert_eq!(class1.name().unwrap(), "String");
     assert_eq!(class2.name().unwrap(), "String");
     assert_eq!(class3.name().unwrap(), "String");
 
-    // RModule is also Copy
+    // RModule is also Clone
     let enumerable = RModule::from_name("Enumerable").unwrap();
-    let mod1 = enumerable;
-    let mod2 = enumerable;
+    let mod1 = enumerable.clone();
+    let mod2 = enumerable.clone();
 
     assert_eq!(mod1.name().unwrap(), "Enumerable");
     assert_eq!(mod2.name().unwrap(), "Enumerable");
@@ -421,12 +434,12 @@ mod tests {
 
     #[test]
     fn test_compile_time_checks() {
-        // Verify RClass is Copy
-        fn assert_copy<T: Copy>() {}
-        assert_copy::<RClass>();
+        // Verify RClass is Clone
+        fn assert_clone<T: Clone>() {}
+        assert_clone::<RClass>();
 
-        // Verify RModule is Copy
-        assert_copy::<RModule>();
+        // Verify RModule is Clone
+        assert_clone::<RModule>();
     }
 
     #[test]

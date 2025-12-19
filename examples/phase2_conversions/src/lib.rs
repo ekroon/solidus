@@ -91,12 +91,12 @@ pub extern "C" fn example_integer_conversions(val: rb_sys::VALUE) -> rb_sys::VAL
     let value = unsafe { Value::from_raw(val) };
     
     // Try converting to different integer types
-    if let Ok(n) = i32::try_convert(value) {
+    if let Ok(n) = i32::try_convert(value.clone()) {
         // Successfully converted to i32
         let doubled = n * 2;
         return doubled.into_value().as_raw();
     }
-    
+
     // If it doesn't fit in i32, try i64
     if let Ok(n) = i64::try_convert(value) {
         let doubled = n * 2;
@@ -135,11 +135,11 @@ pub extern "C" fn example_symbols() -> rb_sys::VALUE {
 pub extern "C" fn example_str_to_symbol() -> rb_sys::VALUE {
     // &str can be directly converted to a Ruby symbol
     let sym_value = "test_symbol".into_value();
-    
+
     // Verify it's a symbol
-    let sym = Symbol::try_convert(sym_value).unwrap();
+    let sym = Symbol::try_convert(sym_value.clone()).unwrap();
     assert_eq!(sym.name().unwrap(), "test_symbol");
-    
+
     sym_value.as_raw()
 }
 
@@ -150,16 +150,16 @@ pub extern "C" fn example_str_to_symbol() -> rb_sys::VALUE {
 pub extern "C" fn example_floats(f: f64) -> rb_sys::VALUE {
     // Convert f64 to Ruby
     let ruby_float = f.into_value();
-    
+
     // Convert back
-    let back_to_rust = f64::try_convert(ruby_float).unwrap();
+    let back_to_rust = f64::try_convert(ruby_float.clone()).unwrap();
     assert!((back_to_rust - f).abs() < 0.00001);
-    
+
     // f32 also works
     let f32_val = 2.5f32.into_value();
     let back = f32::try_convert(f32_val).unwrap();
     assert!((back - 2.5f32).abs() < 0.00001);
-    
+
     ruby_float.as_raw()
 }
 
@@ -220,16 +220,16 @@ mod tests {
     fn test_compile_time_checks() {
         // These tests verify compile-time behavior only
         // Tests requiring Ruby API calls need the Ruby runtime
-        
-        // Verify immediate types are Copy
-        fn assert_copy<T: Copy>() {}
-        assert_copy::<Qnil>();
-        assert_copy::<Qtrue>();
-        assert_copy::<Qfalse>();
-        assert_copy::<Fixnum>();
-        assert_copy::<Symbol>();
-        
+
+        // Verify immediate types are Clone
+        fn assert_clone<T: Clone>() {}
+        assert_clone::<Qnil>();
+        assert_clone::<Qtrue>();
+        assert_clone::<Qfalse>();
+        assert_clone::<Fixnum>();
+        assert_clone::<Symbol>();
+
         #[cfg(target_pointer_width = "64")]
-        assert_copy::<Flonum>();
+        assert_clone::<Flonum>();
     }
 }
