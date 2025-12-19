@@ -94,12 +94,6 @@ struct StringCollector {
 }
 
 impl StringCollector {
-    fn new() -> Self {
-        StringCollector {
-            strings: Vec::new(),
-        }
-    }
-
     /// Add a string to the collection.
     ///
     /// We clone the value from the pinned reference and box it.
@@ -134,17 +128,27 @@ impl StringCollector {
 }
 
 // Global collector for demonstration (in real code, use TypedData wrapper)
-static mut COLLECTOR: Option<StringCollector> = None;
+// Using std::cell::UnsafeCell for Rust 2024 compatibility (avoids static mut references)
+use std::cell::UnsafeCell;
+
+struct CollectorHolder {
+    collector: UnsafeCell<StringCollector>,
+}
+
+// SAFETY: Ruby is single-threaded, so this is safe for Ruby extension use.
+// In production, prefer TypedData to wrap stateful objects.
+unsafe impl Sync for CollectorHolder {}
+
+static COLLECTOR_HOLDER: CollectorHolder = CollectorHolder {
+    collector: UnsafeCell::new(StringCollector {
+        strings: Vec::new(),
+    }),
+};
 
 fn get_collector() -> &'static mut StringCollector {
-    // SAFETY: This is only safe because Ruby runs single-threaded.
-    // In production, use TypedData to wrap the collector properly.
-    unsafe {
-        if COLLECTOR.is_none() {
-            COLLECTOR = Some(StringCollector::new());
-        }
-        COLLECTOR.as_mut().unwrap()
-    }
+    // SAFETY: Ruby is single-threaded, so only one thread accesses this.
+    // This pattern avoids mutable static references which are UB in Rust 2024.
+    unsafe { &mut *COLLECTOR_HOLDER.collector.get() }
 }
 
 // ============================================================================
