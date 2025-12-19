@@ -1,0 +1,20 @@
+[package]
+name = "collections"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+# This example is not part of the main workspace
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+solidus = { path = "../../crates/solidus" }
+rb-sys = "0.9"
+
+[build-dependencies]
+rb-sys-build = "0.9"
+
+[features]
+default = []
