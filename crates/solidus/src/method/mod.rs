@@ -9,7 +9,7 @@
 //! The method registration system consists of:
 //!
 //! - [`MethodArg`] - Marker trait for types that can be method arguments
-//! - [`ReturnValue`] - Trait for types that can be returned from methods
+//! - [`IntoReturnValue`] - Trait for types that can be returned from methods
 //! - `method!` - Macro for wrapping Rust functions as Ruby methods
 //!
 //! # Example
@@ -17,12 +17,15 @@
 //! ```no_run
 //! use solidus::prelude::*;
 //!
-//! // Define a method
-//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+//! // Define a method with context parameter
+//! fn concat<'ctx>(
+//!     ctx: &'ctx Context,
+//!     rb_self: RString,
+//!     other: Pin<&StackPinned<RString>>
+//! ) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
 //!     // `other` is pinned on the stack, safe from GC
-//!     let other_str = other.get();
-//!     // ... implement concat logic
-//!     Ok(rb_self)
+//!     let result = format!("{}{}", rb_self.to_string()?, other.get().to_string()?);
+//!     ctx.new_string(&result).map_err(Into::into)
 //! }
 //!
 //! // Register the method
@@ -45,30 +48,48 @@ pub use return_value::ReturnValue;
 /// registration functions (like `rb_define_method` from the Ruby C API). The wrapper handles:
 ///
 /// - Panic catching via `std::panic::catch_unwind`
+/// - Creating a `Context` for safe value creation
 /// - Type conversion of arguments via `TryConvert`
 /// - Stack pinning of heap-allocated arguments
 /// - Error propagation (converts `Err` to Ruby exceptions)
-/// - Return value conversion via `IntoValue`
+/// - Return value conversion via `IntoReturnValue`
 ///
 /// # Arity
 ///
-/// The macro requires specifying the arity (number of arguments excluding self).
-/// Use `method!(function_name, arity)` where arity is 0-15.
+/// The macro requires specifying the arity (number of arguments excluding self and context).
+/// Use `method!(function_name, arity)` where arity is 0-4.
+///
+/// # Method Signature
+///
+/// Methods must follow this signature pattern:
+/// ```ignore
+/// fn method_name<'ctx>(
+///     ctx: &'ctx Context,
+///     rb_self: SelfType,
+///     // ... additional arguments as Pin<&StackPinned<T>>
+/// ) -> Result<ReturnType, Error>
+/// ```
+///
+/// Where `ReturnType` implements `IntoReturnValue` (e.g., `Pin<&'ctx StackPinned<RString>>`, `i64`, `bool`).
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use solidus::prelude::*;
 ///
 /// // Arity 0 - just self
-/// fn length(rb_self: RString) -> Result<i64, Error> {
+/// fn length<'ctx>(ctx: &'ctx Context, rb_self: RString) -> Result<i64, Error> {
 ///     Ok(rb_self.len() as i64)
 /// }
 ///
 /// // Arity 1 - self + one argument  
-/// fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
-///     // other is automatically pinned by the wrapper
-///     Ok(rb_self)
+/// fn concat<'ctx>(
+///     ctx: &'ctx Context,
+///     rb_self: RString,
+///     other: Pin<&StackPinned<RString>>
+/// ) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+///     let result = format!("{}{}", rb_self.to_string()?, other.get().to_string()?);
+///     ctx.new_string(&result).map_err(Into::into)
 /// }
 ///
 /// // Register with Ruby
@@ -82,17 +103,20 @@ macro_rules! method {
         #[allow(unused_unsafe)]
         unsafe extern "C" fn wrapper(rb_self: $crate::rb_sys::VALUE) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                // Create Context on wrapper's stack
+                let ctx = $crate::context::Context::<8>::new();
+
                 let self_value = unsafe { $crate::Value::from_raw(rb_self) };
                 let self_converted = $crate::convert::TryConvert::try_convert(self_value)?;
 
-                let result = $func(self_converted);
+                let result = $func(&ctx, self_converted);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -109,6 +133,8 @@ macro_rules! method {
             arg0: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let self_value = unsafe { $crate::Value::from_raw(rb_self) };
                 let self_converted = $crate::convert::TryConvert::try_convert(self_value)?;
 
@@ -116,14 +142,14 @@ macro_rules! method {
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
                 $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
-                let result = $func(self_converted, arg0_pinned);
+                let result = $func(&ctx, self_converted, arg0_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -141,6 +167,8 @@ macro_rules! method {
             arg1: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let self_value = unsafe { $crate::Value::from_raw(rb_self) };
                 let self_converted = $crate::convert::TryConvert::try_convert(self_value)?;
 
@@ -152,14 +180,14 @@ macro_rules! method {
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
                 $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
-                let result = $func(self_converted, arg0_pinned, arg1_pinned);
+                let result = $func(&ctx, self_converted, arg0_pinned, arg1_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -178,6 +206,8 @@ macro_rules! method {
             arg2: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let self_value = unsafe { $crate::Value::from_raw(rb_self) };
                 let self_converted = $crate::convert::TryConvert::try_convert(self_value)?;
 
@@ -193,14 +223,14 @@ macro_rules! method {
                 let arg2_converted = $crate::convert::TryConvert::try_convert(arg2_value)?;
                 $crate::pin_on_stack!(arg2_pinned = $crate::value::NewValue::new(arg2_converted));
 
-                let result = $func(self_converted, arg0_pinned, arg1_pinned, arg2_pinned);
+                let result = $func(&ctx, self_converted, arg0_pinned, arg1_pinned, arg2_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -220,6 +250,8 @@ macro_rules! method {
             arg3: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let self_value = unsafe { $crate::Value::from_raw(rb_self) };
                 let self_converted = $crate::convert::TryConvert::try_convert(self_value)?;
 
@@ -240,6 +272,7 @@ macro_rules! method {
                 $crate::pin_on_stack!(arg3_pinned = $crate::value::NewValue::new(arg3_converted));
 
                 let result = $func(
+                    &ctx,
                     self_converted,
                     arg0_pinned,
                     arg1_pinned,
@@ -247,12 +280,12 @@ macro_rules! method {
                     arg3_pinned,
                 );
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -261,9 +294,7 @@ macro_rules! method {
         unsafe { ::std::mem::transmute(wrapper as usize) }
     }};
 
-    // Arities 5-15: Follow the same pattern as 0-4
-    // These can be added by duplicating the arity 4 pattern and adding more arguments
-    // For now, we provide a helpful error message
+    // Arities 5-15: Follow the same pattern
     ($func:path, $arity:literal) => {
         compile_error!(concat!(
             "method! arity ",
@@ -288,32 +319,44 @@ macro_rules! method {
 /// The wrapper handles:
 ///
 /// - Panic catching via `std::panic::catch_unwind`
+/// - Creating a `Context` for safe value creation
 /// - Type conversion of arguments via `TryConvert`
 /// - Stack pinning of heap-allocated arguments
 /// - Error propagation (converts `Err` to Ruby exceptions)
-/// - Return value conversion via `IntoValue`
+/// - Return value conversion via `IntoReturnValue`
 ///
 /// # Arity
 ///
-/// The macro requires specifying the arity (number of arguments).
+/// The macro requires specifying the arity (number of arguments, excluding context).
 /// Use `function!(function_name, arity)` where arity is 0-4.
+///
+/// # Function Signature
+///
+/// Functions must follow this signature pattern:
+/// ```ignore
+/// fn func_name<'ctx>(
+///     ctx: &'ctx Context,
+///     // ... additional arguments as Pin<&StackPinned<T>>
+/// ) -> Result<ReturnType, Error>
+/// ```
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use solidus::prelude::*;
 ///
 /// // Arity 0 - no arguments
-/// fn greet() -> Result<NewValue<RString>, Error> {
-///     // SAFETY: Value is immediately returned to Ruby
-///     Ok(unsafe { RString::new("Hello, World!") })
+/// fn greet<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+///     ctx.new_string("Hello, World!").map_err(Into::into)
 /// }
 ///
 /// // Arity 1 - one argument
-/// fn greet_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
-///     // name is automatically pinned by the wrapper
-///     // SAFETY: Value is immediately returned to Ruby
-///     Ok(unsafe { RString::new(&format!("Hello, {}!", name.get().to_string()?)) })
+/// fn greet_name<'ctx>(
+///     ctx: &'ctx Context,
+///     name: Pin<&StackPinned<RString>>
+/// ) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+///     let msg = format!("Hello, {}!", name.get().to_string()?);
+///     ctx.new_string(&msg).map_err(Into::into)
 /// }
 ///
 /// // Register with Ruby
@@ -327,14 +370,16 @@ macro_rules! function {
         #[allow(unused_unsafe)]
         unsafe extern "C" fn wrapper(_rb_self: $crate::rb_sys::VALUE) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
-                let result = $func();
+                let ctx = $crate::context::Context::<8>::new();
 
-                use $crate::method::ReturnValue;
+                let result = $func(&ctx);
+
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -351,18 +396,20 @@ macro_rules! function {
             arg0: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
                 $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
 
-                let result = $func(arg0_pinned);
+                let result = $func(&ctx, arg0_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -380,6 +427,8 @@ macro_rules! function {
             arg1: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
                 $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
@@ -388,14 +437,14 @@ macro_rules! function {
                 let arg1_converted = $crate::convert::TryConvert::try_convert(arg1_value)?;
                 $crate::pin_on_stack!(arg1_pinned = $crate::value::NewValue::new(arg1_converted));
 
-                let result = $func(arg0_pinned, arg1_pinned);
+                let result = $func(&ctx, arg0_pinned, arg1_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -414,6 +463,8 @@ macro_rules! function {
             arg2: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
                 $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
@@ -426,14 +477,14 @@ macro_rules! function {
                 let arg2_converted = $crate::convert::TryConvert::try_convert(arg2_value)?;
                 $crate::pin_on_stack!(arg2_pinned = $crate::value::NewValue::new(arg2_converted));
 
-                let result = $func(arg0_pinned, arg1_pinned, arg2_pinned);
+                let result = $func(&ctx, arg0_pinned, arg1_pinned, arg2_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -453,6 +504,8 @@ macro_rules! function {
             arg3: $crate::rb_sys::VALUE,
         ) -> $crate::rb_sys::VALUE {
             let result = ::std::panic::catch_unwind(|| {
+                let ctx = $crate::context::Context::<8>::new();
+
                 let arg0_value = unsafe { $crate::Value::from_raw(arg0) };
                 let arg0_converted = $crate::convert::TryConvert::try_convert(arg0_value)?;
                 $crate::pin_on_stack!(arg0_pinned = $crate::value::NewValue::new(arg0_converted));
@@ -469,14 +522,14 @@ macro_rules! function {
                 let arg3_converted = $crate::convert::TryConvert::try_convert(arg3_value)?;
                 $crate::pin_on_stack!(arg3_pinned = $crate::value::NewValue::new(arg3_converted));
 
-                let result = $func(arg0_pinned, arg1_pinned, arg2_pinned, arg3_pinned);
+                let result = $func(&ctx, arg0_pinned, arg1_pinned, arg2_pinned, arg3_pinned);
 
-                use $crate::method::ReturnValue;
+                use $crate::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => $crate::Error::from_panic(panic).raise(),
             }
@@ -485,9 +538,7 @@ macro_rules! function {
         unsafe { ::std::mem::transmute(wrapper as usize) }
     }};
 
-    // Arities 5-15: Follow the same pattern as 0-4
-    // These can be added by duplicating the arity 4 pattern and adding more arguments
-    // For now, we provide a helpful error message
+    // Arities 5-15: Follow the same pattern
     ($func:path, $arity:literal) => {
         compile_error!(concat!(
             "function! arity ",
