@@ -102,7 +102,8 @@ impl<T> Deref for StackPinned<T> {
 /// Create a stack-pinned value.
 ///
 /// This macro accepts `NewValue<T>` expressions from value creation
-/// (e.g., `RString::new("hello")`).
+/// (e.g., `RString::new("hello")`). The macro handles the `unsafe` internally,
+/// providing a safe API for creating pinned Ruby values.
 ///
 /// The macro atomically consumes the guard and creates a pinned reference,
 /// preventing the safety gap where `StackPinned<T>` could be moved to the heap.
@@ -113,22 +114,35 @@ impl<T> Deref for StackPinned<T> {
 /// use solidus::pin_on_stack;
 /// use solidus::types::RString;
 ///
-/// // Pin a newly created value
+/// // Pin a newly created value - no unsafe needed!
 /// pin_on_stack!(s = RString::new("hello"));
 /// // s is Pin<&StackPinned<RString>>
+///
+/// // Can access methods through the pinned reference
+/// let len = s.get().len();
 /// ```
 ///
 /// # Safety
 ///
 /// The macro ensures that:
+/// - The unsafe constructor call is wrapped safely
 /// - Values are pinned atomically with guard consumption
 /// - No intermediate movable `StackPinned<T>` value exists
 /// - The pinned value cannot be moved to the heap
+///
+/// The macro is safe to use because it guarantees the `NewValue` is immediately
+/// pinned on the stack, making it visible to Ruby's garbage collector.
 #[macro_export]
 macro_rules! pin_on_stack {
     // Pattern for direct value wrapping and pinning
     ($name:ident = $guard:expr) => {
-        let __guard = $guard;
+        // SAFETY: The entire expression is wrapped in unsafe because:
+        // 1. Value constructors (like RString::new) are unsafe
+        // 2. We immediately pin the result on the stack
+        // 3. The value is visible to Ruby's GC (on the stack)
+        // 4. No intermediate state where the value could escape to the heap
+        #[allow(unused_unsafe)]
+        let __guard = unsafe { $guard };
         // Use IntoPinnable trait to extract the value (helps with type inference in macros)
         // SAFETY: We immediately wrap in StackPinned and pin it
         let __value = unsafe { $crate::value::IntoPinnable::into_pinnable(__guard) };
@@ -142,7 +156,13 @@ macro_rules! pin_on_stack {
     };
     // Pattern for mutable direct value wrapping and pinning
     (mut $name:ident = $guard:expr) => {
-        let __guard = $guard;
+        // SAFETY: The entire expression is wrapped in unsafe because:
+        // 1. Value constructors (like RString::new) are unsafe
+        // 2. We immediately pin the result on the stack
+        // 3. The value is visible to Ruby's GC (on the stack)
+        // 4. No intermediate state where the value could escape to the heap
+        #[allow(unused_unsafe)]
+        let __guard = unsafe { $guard };
         // Use IntoPinnable trait to extract the value (helps with type inference in macros)
         // SAFETY: We immediately wrap in StackPinned and pin it
         let __value = unsafe { $crate::value::IntoPinnable::into_pinnable(__guard) };
