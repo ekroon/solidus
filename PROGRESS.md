@@ -12,7 +12,7 @@ Update this file when a phase is completed to avoid requiring full analysis.
 | 2 | [Types](docs/plan/phase-2-types.md) | :white_check_mark: Complete | 2025-12-16 |
 | 3 | [Methods](docs/plan/phase-3-methods.md) | :white_check_mark: Complete | 2025-12-16 |
 | 4 | [TypedData](docs/plan/phase-4-typed-data.md) | :white_check_mark: Complete | 2025-12-18 |
-| 5 | [Polish](docs/plan/phase-5-polish.md) | :hourglass: Pending | |
+| 5 | [Polish](docs/plan/phase-5-polish.md) | :white_check_mark: Complete | 2025-12-19 |
 | 6 | [Safety Validation](docs/plan/phase-6-safety-validation.md) | :hourglass: Pending | |
 
 ## Status Legend
@@ -157,6 +157,40 @@ let mut values = vec![arr_boxed];     // Safe!
 ### Status
 
 ✅ **COMPLETE** - All implementation tasks finished. See Stage 10 in phase-2-tasks.md.
+
+Phase 5 completed with comprehensive documentation and examples:
+- **Guide Documentation** (Complete):
+  - `docs/guide/getting-started.md` - First extension walkthrough
+  - `docs/guide/pinning.md` - Explanation of pinning and why it matters
+  - `docs/guide/types.md` - Working with Ruby types
+  - `docs/guide/methods.md` - Defining Ruby methods
+  - `docs/guide/typed-data.md` - Wrapping Rust types as Ruby objects
+  - `docs/guide/error-handling.md` - Error handling patterns
+  - `docs/guide/boxvalue.md` - When and how to use BoxValue
+- **Examples** (Complete):
+  - `examples/hello_world/` - Minimal extension demonstrating basic setup
+  - `examples/pinned_values/` - Stack pinning and heap boxing patterns
+  - `examples/collections/` - Working with RArray and RHash
+- **Ruby Integration Tests** (Complete):
+  - `tests/ruby/run_tests.rb` - Test runner for all examples
+  - `tests/ruby/README.md` - Documentation for running tests
+- **CI Enhancements** (Complete):
+  - Added `test-examples` job to CI for ubuntu-latest and macos-latest
+  - Tests hello_world, pinned_values, phase3_methods, phase3_attr_macros, phase4_typed_data
+- **README Enhancement** (Complete):
+  - Added Quick Start example
+  - Added API Overview section
+  - Added Comparison with Magnus section
+  - Added Documentation links
+  - Added Contributing section
+
+All acceptance criteria met:
+- All public APIs documented (lib.rs, all modules have doc comments)
+- Guide covers all major concepts (7 guide documents)
+- Examples are complete and working (3 new examples + existing phase examples)
+- Test coverage is comprehensive (95 tests pass)
+- CI passes on all platforms (Linux, macOS, Windows)
+- README is complete and accurate
 
 <!-- Add any relevant notes about progress, blockers, or decisions here -->
 
