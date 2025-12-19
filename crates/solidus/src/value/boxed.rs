@@ -31,12 +31,10 @@ use crate::gc;
 /// ```no_run
 /// use solidus::BoxValue;
 /// use solidus::types::RString;
-/// use solidus::pin_on_stack;
 ///
-/// // Store Ruby values in a Vec
+/// // Store Ruby values in a Vec using the *_boxed() constructor
 /// let mut strings: Vec<BoxValue<RString>> = Vec::new();
-/// pin_on_stack!(ruby_string = RString::new("hello"));
-/// strings.push(BoxValue::new(ruby_string.get().clone()));
+/// strings.push(RString::new_boxed("hello"));
 ///
 /// // The Ruby string is protected from GC as long as the BoxValue exists
 /// ```
@@ -69,8 +67,11 @@ impl<T: ReprValue> BoxValue<T> {
     ///
     /// Note: This returns a clone of the value.
     /// The BoxValue continues to protect the value from GC.
+    ///
+    /// Prefer using deref (`*boxed` or `&*boxed`) to access the inner value
+    /// by reference instead of cloning.
     #[inline]
-    pub fn get(&self) -> T {
+    pub fn inner(&self) -> T {
         // SAFETY: ptr is always valid
         unsafe { self.ptr.as_ref().clone() }
     }
@@ -82,7 +83,7 @@ impl<T: ReprValue> BoxValue<T> {
     /// After calling this, the returned value is no longer protected from GC.
     /// You must ensure it stays on the stack or re-register it somehow.
     pub fn into_inner(self) -> T {
-        let value = self.get();
+        let value = self.inner();
 
         // Unregister and deallocate
         // SAFETY: The pointer was registered in new()
@@ -134,7 +135,7 @@ impl<T: ReprValue + fmt::Debug> fmt::Debug for BoxValue<T> {
 
 impl<T: ReprValue> Clone for BoxValue<T> {
     fn clone(&self) -> Self {
-        BoxValue::new(self.get())
+        BoxValue::new(self.inner())
     }
 }
 

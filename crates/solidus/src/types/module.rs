@@ -238,9 +238,8 @@ pub trait Module: ReprValue {
     /// use solidus::prelude::*;
     /// use solidus::method;
     ///
-    /// fn my_method(rb_self: RString) -> Result<NewValue<RString>, Error> {
-    ///     // SAFETY: Value is immediately returned to Ruby
-    ///     Ok(unsafe { RString::new("result") })
+    /// fn my_method<'a>(ctx: &'a Context, rb_self: RString) -> Result<Pin<&'a StackPinned<RString>>, Error> {
+    ///     Ok(ctx.new_string("result")?)
     /// }
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -288,7 +287,8 @@ pub trait Module: ReprValue {
     /// use solidus::prelude::*;
     /// use solidus::function;
     ///
-    /// fn class_method() -> Result<i64, Error> {
+    /// fn class_method(ctx: &Context) -> Result<i64, Error> {
+    ///     let _ = ctx;  // Context available if needed
     ///     Ok(42)
     /// }
     ///
@@ -342,7 +342,8 @@ pub trait Module: ReprValue {
     /// use solidus::prelude::*;
     /// use solidus::function;
     ///
-    /// fn my_function() -> Result<i64, Error> {
+    /// fn my_function(ctx: &Context) -> Result<i64, Error> {
+    ///     let _ = ctx;  // Context available if needed
     ///     Ok(42)
     /// }
     ///

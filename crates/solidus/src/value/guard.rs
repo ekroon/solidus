@@ -39,51 +39,25 @@ use super::{BoxValue, ReprValue};
 ///
 /// ```no_run
 /// use solidus::RString;
-/// use solidus::pin_on_stack;
+/// use solidus::BoxValue;
 ///
-/// // Creating a Ruby string returns a NewValue
-/// // SAFETY: Value is immediately pinned
-/// let guard = unsafe { RString::new("hello") };
-///
-/// // Option 1: Pin on stack (common case)
-/// pin_on_stack!(s = guard);
-/// // Now s is Pin<&StackPinned<RString>>
-///
-/// // Option 2: Box for heap storage
-/// // SAFETY: Value is immediately boxed and GC-registered
-/// let guard = unsafe { RString::new("world") };
-/// let boxed = guard.into_box();
+/// // For heap storage, use the *_boxed() constructors directly
+/// let boxed = RString::new_boxed("hello");
 /// let mut strings = Vec::new();
 /// strings.push(boxed); // Safe - registered with GC
+///
+/// // Inside methods, use Context (see method! macro docs)
 /// ```
 ///
 /// # Must-use Warning
 ///
-/// If you create a value and don't pin or box it, you'll get a compiler warning:
-///
-/// ```no_run
-/// use solidus::types::RString;
-///
-/// // Warning: VALUE must be pinned on stack or explicitly boxed
-/// // SAFETY: The value is unused but this demonstrates the warning
-/// let _ = unsafe { RString::new("oops") };
-/// ```
+/// The `NewValue` type exists for internal use by constructors. For most users,
+/// the `*_boxed()` methods or Context-based creation are preferred.
 ///
 /// # Safety Design
 ///
 /// The critical safety property is that pinning must be **atomic with guard consumption**.
-/// The old design with `.pin()` had a gap:
-/// ```no_run
-/// use solidus::types::RString;
-/// use solidus::pin_on_stack;
-///
-/// // SAFETY: Value is immediately pinned
-/// let guard = unsafe { RString::new("hello") };
-/// pin_on_stack!(stack_pinned = guard);
-/// // stack_pinned is now Pin<&StackPinned<RString>>
-/// ```
-/// The new design eliminates this by making `pin_on_stack!` consume the guard directly,
-/// creating the StackPinned and pinning it atomically in one step.
+/// Inside methods, the `method!` macro provides a `Context` that handles all value creation safely.
 #[must_use = "VALUE must be pinned on stack or explicitly boxed"]
 pub struct NewValue<T: ReprValue> {
     value: T,
@@ -132,9 +106,8 @@ impl<T: ReprValue> NewValue<T> {
     /// ```no_run
     /// use solidus::{RString, BoxValue};
     ///
-    /// // SAFETY: Value is immediately boxed and GC-registered
-    /// let guard = unsafe { RString::new("hello") };
-    /// let boxed = guard.into_box();
+    /// // For collections, prefer the direct *_boxed() constructor
+    /// let boxed = RString::new_boxed("hello");
     ///
     /// let mut strings: Vec<BoxValue<RString>> = Vec::new();
     /// strings.push(boxed); // Safe - registered with GC

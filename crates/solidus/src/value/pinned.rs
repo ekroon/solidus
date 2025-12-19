@@ -24,13 +24,10 @@ use std::pin::Pin;
 /// use std::pin::Pin;
 /// use solidus::value::StackPinned;
 /// use solidus::types::RString;
-/// use solidus::pin_on_stack;
 ///
-/// // The pin_on_stack! macro creates a pinned reference
-/// pin_on_stack!(value = RString::new("hello"));
-///
-/// // Now `value` is a Pin<&StackPinned<RString>>
-/// // It cannot be moved to the heap
+/// // Inside methods, use Context for creating pinned values
+/// // For collections, use the *_boxed() constructors
+/// let boxed = RString::new_boxed("hello");
 /// ```
 #[repr(transparent)]
 pub struct StackPinned<T> {
@@ -111,15 +108,12 @@ impl<T> Deref for StackPinned<T> {
 /// # Examples
 ///
 /// ```no_run
-/// use solidus::pin_on_stack;
 /// use solidus::types::RString;
 ///
-/// // Pin a newly created value - no unsafe needed!
-/// pin_on_stack!(s = RString::new("hello"));
-/// // s is Pin<&StackPinned<RString>>
+/// // For heap storage, use the direct *_boxed() constructors
+/// let boxed = RString::new_boxed("hello");
 ///
-/// // Can access methods through the pinned reference
-/// let len = s.get().len();
+/// // Inside methods, use Context for creating values (see method! macro docs)
 /// ```
 ///
 /// # Safety

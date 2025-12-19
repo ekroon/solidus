@@ -4,63 +4,46 @@ use std::ffi::CStr;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{BoxValue, NewValue, ReprValue, Value};
+use crate::value::{BoxValue, ReprValue, Value};
 
 /// Ruby String (heap allocated).
 ///
 /// Ruby strings are mutable byte sequences with an associated encoding.
 /// These are heap-allocated objects that require GC protection.
 ///
-/// This type is `!Copy` to prevent accidental heap storage. Values must be pinned
-/// on the stack using `pin_on_stack!` or explicitly stored using `BoxValue<RString>`.
+/// This type is `!Copy` to prevent accidental heap storage. Values should be
+/// created via `Context::new_string()` for stack-pinned strings within methods,
+/// or `RString::new_boxed()` for heap-allocated strings.
 ///
 /// # Example
 ///
 /// ```no_run
 /// use solidus::types::RString;
-/// use solidus::pin_on_stack;
 ///
-/// pin_on_stack!(s = RString::new("hello"));
-/// assert_eq!(s.get().len(), 5);
+/// // For heap storage, use new_boxed()
+/// let boxed = RString::new_boxed("hello");
+/// assert_eq!(boxed.len(), 5);
+///
+/// // For stack-pinned strings in methods, use Context::new_string()
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RString(Value);
 
 impl RString {
-    /// Create a new Ruby string from a Rust string slice.
+    /// Internal: Create a new Ruby string from a Rust string slice.
     ///
-    /// Returns a `NewValue<RString>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`new_boxed`](Self::new_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
-    ///
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RString::new("hello world") };
-    /// pin_on_stack!(s = guard);
-    /// assert_eq!(s.get().len(), 11);
-    /// ```
-    pub unsafe fn new(s: &str) -> NewValue<Self> {
-        // SAFETY: Caller ensures the returned value is immediately pinned or boxed
-        unsafe { Self::from_slice(s.as_bytes()) }
+    /// Users should use `Context::new_string()` or `RString::new_boxed()` instead.
+    #[doc(hidden)]
+    pub(crate) unsafe fn new_internal(s: &str) -> Self {
+        // SAFETY: Caller ensures the returned value is properly handled
+        unsafe { Self::from_slice_internal(s.as_bytes()) }
     }
 
     /// Create a new Ruby string, boxed for heap storage.
     ///
     /// This is safe because the value is immediately registered with Ruby's GC.
+    /// Use `Context::new_string()` for stack-pinned strings within methods.
     ///
     /// # Example
     ///
@@ -72,38 +55,12 @@ impl RString {
     /// ```
     pub fn new_boxed(s: &str) -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::new(s) }.into_box()
+        unsafe { BoxValue::new(Self::new_internal(s)) }
     }
 
-    /// Create a new Ruby string from a byte slice.
-    ///
-    /// The string will be created with binary encoding.
-    ///
-    /// Returns a `NewValue<RString>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`from_slice_boxed`](Self::from_slice_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
-    ///
-    /// let bytes = b"hello\x00world";
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RString::from_slice(bytes) };
-    /// pin_on_stack!(s = guard);
-    /// assert_eq!(s.get().len(), 11);
-    /// ```
-    pub unsafe fn from_slice(bytes: &[u8]) -> NewValue<Self> {
+    /// Internal: Create a new Ruby string from a byte slice.
+    #[doc(hidden)]
+    pub(crate) unsafe fn from_slice_internal(bytes: &[u8]) -> Self {
         // SAFETY: rb_str_new creates a new Ruby string with the given bytes
         let val = unsafe {
             rb_sys::rb_str_new(
@@ -112,7 +69,7 @@ impl RString {
             )
         };
         // SAFETY: rb_str_new returns a valid VALUE
-        NewValue::new(RString(unsafe { Value::from_raw(val) }))
+        RString(unsafe { Value::from_raw(val) })
     }
 
     /// Create a new Ruby string from bytes, boxed for heap storage.
@@ -130,7 +87,7 @@ impl RString {
     /// ```
     pub fn from_slice_boxed(bytes: &[u8]) -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::from_slice(bytes) }.into_box()
+        unsafe { BoxValue::new(Self::from_slice_internal(bytes)) }
     }
 
     /// Get the length of the string in bytes.
@@ -139,11 +96,9 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s = unsafe { RString::new("hello") });
-    /// assert_eq!(s.get().len(), 5);
+    /// let s = RString::new_boxed("hello");
+    /// assert_eq!(s.len(), 5);
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
@@ -157,15 +112,12 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s = unsafe { RString::new("") });
-    /// assert!(s.get().is_empty());
+    /// let s = RString::new_boxed("");
+    /// assert!(s.is_empty());
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s2 = unsafe { RString::new("hello") });
-    /// assert!(!s2.get().is_empty());
+    /// let s2 = RString::new_boxed("hello");
+    /// assert!(!s2.is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -188,12 +140,10 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s = unsafe { RString::new("hello") });
+    /// let s = RString::new_boxed("hello");
     /// unsafe {
-    ///     let bytes = s.get().as_slice();
+    ///     let bytes = s.as_slice();
     ///     assert_eq!(bytes, b"hello");
     /// }
     /// ```
@@ -214,11 +164,9 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s = unsafe { RString::new("hello") });
-    /// assert_eq!(s.get().to_string().unwrap(), "hello");
+    /// let s = RString::new_boxed("hello");
+    /// assert_eq!(s.to_string().unwrap(), "hello");
     /// ```
     pub fn to_string(&self) -> Result<String, Error> {
         // SAFETY: We immediately copy the bytes, so they don't outlive the string
@@ -239,11 +187,9 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s = unsafe { RString::new("hello") });
-    /// assert_eq!(s.get().to_bytes(), b"hello");
+    /// let s = RString::new_boxed("hello");
+    /// assert_eq!(s.to_bytes(), b"hello");
     /// ```
     pub fn to_bytes(&self) -> Vec<u8> {
         // SAFETY: We immediately copy the bytes, so they don't outlive the string
@@ -256,11 +202,9 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::RString;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(s = unsafe { RString::new("hello") });
-    /// let enc = s.get().encoding();
+    /// let s = RString::new_boxed("hello");
+    /// let enc = s.encoding();
     /// ```
     pub fn encoding(&self) -> Encoding {
         // SAFETY: self.0 is a valid Ruby string VALUE
@@ -276,11 +220,10 @@ impl RString {
     ///
     /// ```no_run
     /// use solidus::types::{RString, Encoding};
-    /// use solidus::pin_on_stack;
     ///
-    /// pin_on_stack!(s = RString::new("hello"));
+    /// let s = RString::new_boxed("hello");
     /// let utf8 = Encoding::utf8();
-    /// let encoded = s.get().encode(utf8).unwrap();
+    /// let encoded = s.encode(utf8).unwrap();
     /// ```
     pub fn encode(&self, encoding: Encoding) -> Result<RString, Error> {
         // SAFETY: self.0 is a valid Ruby string, encoding.ptr is a valid encoding
@@ -336,20 +279,16 @@ impl TryConvert for String {
 
 impl IntoValue for String {
     fn into_value(self) -> Value {
-        // SAFETY: We immediately convert to Value
-        let guard = unsafe { RString::new(&self) };
-        // SAFETY: We immediately convert to Value
-        unsafe { guard.into_inner().into_value() }
+        // Use the boxed version for safety
+        RString::new_boxed(&self).as_value()
     }
 }
 
 // Convert string slices to Ruby strings
 impl IntoValue for &str {
     fn into_value(self) -> Value {
-        // SAFETY: We immediately convert to Value
-        let guard = unsafe { RString::new(self) };
-        // SAFETY: We immediately convert to Value
-        unsafe { guard.into_inner().into_value() }
+        // Use the boxed version for safety
+        RString::new_boxed(self).as_value()
     }
 }
 
@@ -365,12 +304,10 @@ impl IntoValue for &str {
 ///
 /// ```no_run
 /// use solidus::types::{RString, Encoding};
-/// use solidus::pin_on_stack;
 ///
 /// let enc = Encoding::utf8();
-/// // SAFETY: Value is immediately pinned
-/// pin_on_stack!(s = unsafe { RString::new("hello") });
-/// let encoded = s.get().encode(enc).unwrap();
+/// let s = RString::new_boxed("hello");
+/// let encoded = s.encode(enc).unwrap();
 /// ```
 #[derive(Clone, Debug)]
 pub struct Encoding {
@@ -463,41 +400,41 @@ mod tests {
     use rb_sys_test_helpers::ruby_test;
 
     #[ruby_test]
-    fn test_rstring_new() {
-        let s = RString::new("hello");
+    fn test_rstring_new_boxed() {
+        let s = RString::new_boxed("hello");
         assert_eq!(s.len(), 5);
         assert!(!s.is_empty());
     }
 
     #[ruby_test]
     fn test_rstring_empty() {
-        let s = RString::new("");
+        let s = RString::new_boxed("");
         assert_eq!(s.len(), 0);
         assert!(s.is_empty());
     }
 
     #[ruby_test]
-    fn test_rstring_from_slice() {
+    fn test_rstring_from_slice_boxed() {
         let bytes = b"hello\x00world";
-        let s = RString::from_slice(bytes);
+        let s = RString::from_slice_boxed(bytes);
         assert_eq!(s.len(), 11);
     }
 
     #[ruby_test]
     fn test_rstring_to_string() {
-        let s = RString::new("hello world");
+        let s = RString::new_boxed("hello world");
         assert_eq!(s.to_string().unwrap(), "hello world");
     }
 
     #[ruby_test]
     fn test_rstring_to_bytes() {
-        let s = RString::new("hello");
+        let s = RString::new_boxed("hello");
         assert_eq!(s.to_bytes(), b"hello");
     }
 
     #[ruby_test]
     fn test_rstring_as_slice() {
-        let s = RString::new("hello");
+        let s = RString::new_boxed("hello");
         unsafe {
             let bytes = s.as_slice();
             assert_eq!(bytes, b"hello");
@@ -506,7 +443,8 @@ mod tests {
 
     #[ruby_test]
     fn test_rstring_try_convert() {
-        let val = RString::new("test").into_value();
+        let s = RString::new_boxed("test");
+        let val = s.into_value();
         let s = RString::try_convert(val).unwrap();
         assert_eq!(s.to_string().unwrap(), "test");
     }
@@ -560,7 +498,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rstring_encoding() {
-        let s = RString::new("hello");
+        let s = RString::new_boxed("hello");
         let enc = s.encoding();
         // Default encoding depends on Ruby version and environment
         // Just verify we can get it
@@ -569,7 +507,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rstring_encode() {
-        let s = RString::new("hello");
+        let s = RString::new_boxed("hello");
         let utf8 = Encoding::utf8();
         let encoded = s.encode(utf8).unwrap();
         assert_eq!(encoded.to_string().unwrap(), "hello");
@@ -578,14 +516,14 @@ mod tests {
     #[ruby_test]
     fn test_rstring_round_trip() {
         let original = "test string with émojis 🎉";
-        let s = RString::new(original);
+        let s = RString::new_boxed(original);
         assert_eq!(s.to_string().unwrap(), original);
     }
 
     #[ruby_test]
     fn test_rstring_with_null_bytes() {
         let bytes = b"hello\x00world\x00";
-        let s = RString::from_slice(bytes);
+        let s = RString::from_slice_boxed(bytes);
         assert_eq!(s.len(), 12);
         assert_eq!(s.to_bytes(), bytes);
     }

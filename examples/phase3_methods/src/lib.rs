@@ -21,18 +21,30 @@ use std::pin::Pin;
 
 /// Instance method with arity 0 - just self
 /// Returns a greeting message
-fn greet(rb_self: RString) -> Result<NewValue<RString>, Error> {
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name = rb_self.to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Hello, {}!", name)) })
+    ctx.new_string(&format!("Hello, {}!", name))
+        .map_err(Into::into)
 }
 
 /// Instance method with arity 1 - self + one argument
 /// Adds a number to another number (passed as string, converted to int)
-fn add(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
-    let a = rb_self.to_string()?.parse::<i64>()
+fn add(
+    _ctx: &Context,
+    rb_self: RString,
+    other: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
+    let a = rb_self
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
-    let b = other.get().to_string()?.parse::<i64>()
+    let b = other
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("second argument must be a number"))?;
     Ok(a + b)
 }
@@ -40,22 +52,36 @@ fn add(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<i64, Error
 /// Instance method with arity 2 - self + two arguments
 /// Multiplies three numbers together
 fn multiply_three(
+    _ctx: &Context,
     rb_self: RString,
     arg1: Pin<&StackPinned<RString>>,
     arg2: Pin<&StackPinned<RString>>,
 ) -> Result<i64, Error> {
-    let a = rb_self.to_string()?.parse::<i64>()
+    let a = rb_self
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
-    let b = arg1.get().to_string()?.parse::<i64>()
+    let b = arg1
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("second argument must be a number"))?;
-    let c = arg2.get().to_string()?.parse::<i64>()
+    let c = arg2
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("third argument must be a number"))?;
     Ok(a * b * c)
 }
 
 /// Instance method that demonstrates error handling
 /// Returns an error if called
-fn always_fails(_rb_self: RString) -> Result<NewValue<RString>, Error> {
+fn always_fails<'ctx>(
+    ctx: &'ctx Context,
+    _rb_self: RString,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    // We need to specify a return type even though we always error
+    let _ = ctx;
     Err(Error::runtime("This method always fails!"))
 }
 
@@ -65,29 +91,31 @@ fn always_fails(_rb_self: RString) -> Result<NewValue<RString>, Error> {
 
 /// Module function with arity 0
 /// Returns a constant string
-fn get_version() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("1.0.0") })
+fn get_version<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("1.0.0").map_err(Into::into)
 }
 
 /// Module function with arity 1
 /// Converts a string to uppercase
-fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn to_upper<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let input = s.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&input.to_uppercase()) })
+    ctx.new_string(&input.to_uppercase()).map_err(Into::into)
 }
 
 /// Module function with arity 2
 /// Joins two strings with a separator
-fn join_with(
+fn join_with<'ctx>(
+    ctx: &'ctx Context,
     s1: Pin<&StackPinned<RString>>,
     s2: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let str1 = s1.get().to_string()?;
     let str2 = s2.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{} - {}", str1, str2)) })
+    ctx.new_string(&format!("{} - {}", str1, str2))
+        .map_err(Into::into)
 }
 
 // ============================================================================
@@ -96,25 +124,37 @@ fn join_with(
 
 /// Class method (singleton method) with arity 0
 /// Returns a constant string representation of PI
-fn pi() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("3.14159") })
+fn pi<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("3.14159").map_err(Into::into)
 }
 
 /// Class method with arity 1
 /// Doubles a number (passed as string)
-fn double(n: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
-    let num = n.get().to_string()?.parse::<i64>()
+fn double(_ctx: &Context, n: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
+    let num = n
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("argument must be a number"))?;
     Ok(num * 2)
 }
 
 /// Class method with arity 2
 /// Calculates power (base^exponent, both as strings)
-fn power(base: Pin<&StackPinned<RString>>, exponent: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
-    let b = base.get().to_string()?.parse::<i64>()
+fn power(
+    _ctx: &Context,
+    base: Pin<&StackPinned<RString>>,
+    exponent: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
+    let b = base
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("base must be a number"))?;
-    let e = exponent.get().to_string()?.parse::<u32>()
+    let e = exponent
+        .get()
+        .to_string()?
+        .parse::<u32>()
         .map_err(|_| Error::argument("exponent must be a positive number"))?;
     Ok(b.pow(e))
 }
@@ -124,17 +164,19 @@ fn power(base: Pin<&StackPinned<RString>>, exponent: Pin<&StackPinned<RString>>)
 // ============================================================================
 
 /// Class method that creates a new Calculator with a default name
-fn create_default() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Calculator") })
+fn create_default<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Calculator").map_err(Into::into)
 }
 
 /// Class method with arity 1
 /// Creates a Calculator with a custom name
-fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn create_with_name<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let n = name.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Calculator: {}", n)) })
+    ctx.new_string(&format!("Calculator: {}", n))
+        .map_err(Into::into)
 }
 
 // ============================================================================
@@ -143,45 +185,65 @@ fn create_with_name(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString
 
 /// Global function with arity 0
 /// Returns a greeting
-fn hello() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello from Solidus!") })
+fn hello<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello from Solidus!").map_err(Into::into)
 }
 
 /// Global function with arity 1
 /// Repeats a string n times
-fn repeat_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn repeat_string<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let input = s.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&input.repeat(3)) })
+    ctx.new_string(&input.repeat(3)).map_err(Into::into)
 }
 
 /// Global function with arity 2
 /// Returns the sum of two integers (passed as strings)
-fn add_numbers(a: Pin<&StackPinned<RString>>, b: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
-    let num_a = a.get().to_string()?.parse::<i64>()
+fn add_numbers(
+    _ctx: &Context,
+    a: Pin<&StackPinned<RString>>,
+    b: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
+    let num_a = a
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
-    let num_b = b.get().to_string()?.parse::<i64>()
+    let num_b = b
+        .get()
+        .to_string()?
+        .parse::<i64>()
         .map_err(|_| Error::argument("second argument must be a number"))?;
     Ok(num_a + num_b)
 }
 
 /// Global function with arity 3
 /// Returns the average of three numbers (passed as strings)
-fn average_three(
+fn average_three<'ctx>(
+    ctx: &'ctx Context,
     a: Pin<&StackPinned<RString>>,
     b: Pin<&StackPinned<RString>>,
     c: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
-    let num_a = a.get().to_string()?.parse::<f64>()
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let num_a = a
+        .get()
+        .to_string()?
+        .parse::<f64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
-    let num_b = b.get().to_string()?.parse::<f64>()
+    let num_b = b
+        .get()
+        .to_string()?
+        .parse::<f64>()
         .map_err(|_| Error::argument("second argument must be a number"))?;
-    let num_c = c.get().to_string()?.parse::<f64>()
+    let num_c = c
+        .get()
+        .to_string()?
+        .parse::<f64>()
         .map_err(|_| Error::argument("third argument must be a number"))?;
     let avg = (num_a + num_b + num_c) / 3.0;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{:.1}", avg)) })
+    ctx.new_string(&format!("{:.1}", avg)).map_err(Into::into)
 }
 
 // ============================================================================
@@ -197,21 +259,29 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     let calc_rclass = RClass::try_convert(calc_class)?;
 
     // Instance methods using method! macro
-    calc_rclass.clone().define_method("greet", solidus::method!(greet, 0), 0)?;
-    calc_rclass.clone().define_method("add", solidus::method!(add, 1), 1)?;
-    calc_rclass.clone().define_method("multiply_three", solidus::method!(multiply_three, 2), 2)?;
-    calc_rclass.clone().define_method("always_fails", solidus::method!(always_fails, 0), 0)?;
+    calc_rclass
+        .clone()
+        .define_method("greet", solidus::method!(greet, 0), 0)?;
+    calc_rclass
+        .clone()
+        .define_method("add", solidus::method!(add, 1), 1)?;
+    calc_rclass
+        .clone()
+        .define_method("multiply_three", solidus::method!(multiply_three, 2), 2)?;
+    calc_rclass
+        .clone()
+        .define_method("always_fails", solidus::method!(always_fails, 0), 0)?;
 
     // Class methods using function! macro and define_singleton_method
     calc_rclass.clone().define_singleton_method(
         "create_default",
         solidus::function!(create_default, 0),
-        0
+        0,
     )?;
     calc_rclass.define_singleton_method(
         "create_with_name",
         solidus::function!(create_with_name, 1),
-        1
+        1,
     )?;
 
     // ========================================================================
@@ -226,17 +296,17 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     string_utils_rmodule.clone().define_module_function(
         "get_version",
         solidus::function!(get_version, 0),
-        0
+        0,
     )?;
     string_utils_rmodule.clone().define_module_function(
         "to_upper",
         solidus::function!(to_upper, 1),
-        1
+        1,
     )?;
     string_utils_rmodule.define_module_function(
         "join_with",
         solidus::function!(join_with, 2),
-        2
+        2,
     )?;
 
     // ========================================================================
@@ -247,21 +317,13 @@ fn init_solidus(ruby: &Ruby) -> Result<(), Error> {
     let math_rmodule = RModule::try_convert(math_module)?;
 
     // Singleton methods on the module (class methods)
-    math_rmodule.clone().define_singleton_method(
-        "pi",
-        solidus::function!(pi, 0),
-        0
-    )?;
-    math_rmodule.clone().define_singleton_method(
-        "double",
-        solidus::function!(double, 1),
-        1
-    )?;
-    math_rmodule.define_singleton_method(
-        "power",
-        solidus::function!(power, 2),
-        2
-    )?;
+    math_rmodule
+        .clone()
+        .define_singleton_method("pi", solidus::function!(pi, 0), 0)?;
+    math_rmodule
+        .clone()
+        .define_singleton_method("double", solidus::function!(double, 1), 1)?;
+    math_rmodule.define_singleton_method("power", solidus::function!(power, 2), 2)?;
 
     // ========================================================================
     // Define global functions

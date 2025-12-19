@@ -22,10 +22,10 @@
 //!     // Immediate values can be passed directly
 //!     let num = Fixnum::from_i64(42).unwrap();
 //!     
-//!     // Heap values need pinning - use pin_on_stack! macro
-//!     // SAFETY: Value is immediately pinned
-//!     pin_on_stack!(s = unsafe { RString::new("hello") });
+//!     // Heap values can be created with *_boxed() methods for collections
+//!     let boxed_string = RString::new_boxed("hello");
 //!     
+//!     // Inside methods, use Context for creating values (see method docs)
 //!     Ok(())
 //! }
 //! ```

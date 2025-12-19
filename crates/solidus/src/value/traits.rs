@@ -22,11 +22,10 @@ use super::Value;
 /// ```no_run
 /// use solidus::value::{Value, ReprValue};
 /// use solidus::types::RString;
-/// use solidus::pin_on_stack;
 ///
 /// // All Ruby type wrappers implement ReprValue
-/// pin_on_stack!(string = RString::new("hello"));
-/// let value: Value = string.get().as_value();
+/// let string = RString::new_boxed("hello");
+/// let value: Value = string.as_value();
 /// ```
 pub trait ReprValue: Clone {
     /// Get this value as a base Value.

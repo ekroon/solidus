@@ -4,65 +4,48 @@ use std::collections::HashMap;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{BoxValue, NewValue, ReprValue, Value};
+use crate::value::{BoxValue, ReprValue, Value};
 
 /// Ruby Hash (heap allocated).
 ///
 /// Ruby hashes are dynamic key-value stores that can contain any Ruby values
 /// as keys and values. These are heap-allocated objects that require GC protection.
 ///
+/// Values should be created via `Context::new_hash()` for stack-pinned hashes
+/// within methods, or `RHash::new_boxed()` for heap-allocated hashes.
+///
 /// # Example
 ///
 /// ```no_run
 /// use solidus::types::RHash;
-/// use solidus::pin_on_stack;
 ///
-/// // SAFETY: Value is immediately pinned
-/// pin_on_stack!(hash = unsafe { RHash::new() });
-/// hash.get().insert("key", "value");
-/// assert_eq!(hash.get().len(), 1);
+/// // For heap storage, use new_boxed()
+/// let mut hash = RHash::new_boxed();
+/// hash.insert("key", "value");
+/// assert_eq!(hash.len(), 1);
+///
+/// // For stack-pinned hashes in methods, use Context::new_hash()
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RHash(Value);
 
 impl RHash {
-    /// Create a new empty Ruby hash.
+    /// Internal: Create a new empty Ruby hash.
     ///
-    /// Returns a `NewValue<RHash>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`new_boxed`](Self::new_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RHash;
-    /// use solidus::pin_on_stack;
-    ///
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RHash::new() };
-    /// pin_on_stack!(hash = guard);
-    /// assert_eq!(hash.get().len(), 0);
-    /// assert!(hash.get().is_empty());
-    /// ```
-    pub unsafe fn new() -> NewValue<Self> {
+    /// Users should use `Context::new_hash()` or `RHash::new_boxed()` instead.
+    #[doc(hidden)]
+    pub(crate) unsafe fn new_internal() -> Self {
         // SAFETY: rb_hash_new creates a new Ruby hash
         let val = unsafe { rb_sys::rb_hash_new() };
         // SAFETY: rb_hash_new returns a valid VALUE
-        NewValue::new(RHash(unsafe { Value::from_raw(val) }))
+        RHash(unsafe { Value::from_raw(val) })
     }
 
     /// Create a new empty Ruby hash, boxed for heap storage.
     ///
     /// This is safe because the value is immediately registered with Ruby's GC.
+    /// Use `Context::new_hash()` for stack-pinned hashes within methods.
     ///
     /// # Example
     ///
@@ -75,7 +58,7 @@ impl RHash {
     /// ```
     pub fn new_boxed() -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::new() }.into_box()
+        unsafe { BoxValue::new(Self::new_internal()) }
     }
 
     /// Get the number of key-value pairs in the hash.
@@ -84,13 +67,11 @@ impl RHash {
     ///
     /// ```no_run
     /// use solidus::types::RHash;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// hash.get().insert("a", 1);
-    /// hash.get().insert("b", 2);
-    /// assert_eq!(hash.get().len(), 2);
+    /// let mut hash = RHash::new_boxed();
+    /// hash.insert("a", 1);
+    /// hash.insert("b", 2);
+    /// assert_eq!(hash.len(), 2);
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
@@ -104,14 +85,12 @@ impl RHash {
     ///
     /// ```no_run
     /// use solidus::types::RHash;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// assert!(hash.get().is_empty());
+    /// let mut hash = RHash::new_boxed();
+    /// assert!(hash.is_empty());
     ///
-    /// hash.get().insert("key", "value");
-    /// assert!(!hash.get().is_empty());
+    /// hash.insert("key", "value");
+    /// assert!(!hash.is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -133,16 +112,14 @@ impl RHash {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use solidus::convert::TryConvert;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// hash.get().insert("key", 42i64);
+    /// let mut hash = RHash::new_boxed();
+    /// hash.insert("key", 42i64);
     ///
-    /// let val = hash.get().get("key").unwrap();
+    /// let val = hash.get("key").unwrap();
     /// assert_eq!(i64::try_convert(val)?, 42);
     ///
-    /// assert!(hash.get().get("missing").is_none());
+    /// assert!(hash.get("missing").is_none());
     /// # Ok(())
     /// # }
     /// ```
@@ -167,16 +144,14 @@ impl RHash {
     ///
     /// ```no_run
     /// use solidus::types::RHash;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// hash.get().insert("name", "Alice");
-    /// hash.get().insert("age", 30i64);
-    /// assert_eq!(hash.get().len(), 2);
+    /// let mut hash = RHash::new_boxed();
+    /// hash.insert("name", "Alice");
+    /// hash.insert("age", 30i64);
+    /// assert_eq!(hash.len(), 2);
     ///
-    /// hash.get().insert("age", 31i64); // Update existing key
-    /// assert_eq!(hash.get().len(), 2);
+    /// hash.insert("age", 31i64); // Update existing key
+    /// assert_eq!(hash.len(), 2);
     /// ```
     pub fn insert<K: IntoValue, V: IntoValue>(&self, key: K, value: V) {
         let key_val = key.into_value();
@@ -197,17 +172,15 @@ impl RHash {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use solidus::convert::TryConvert;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// hash.get().insert("key", 42i64);
+    /// let mut hash = RHash::new_boxed();
+    /// hash.insert("key", 42i64);
     ///
-    /// let val = hash.get().delete("key").unwrap();
+    /// let val = hash.delete("key").unwrap();
     /// assert_eq!(i64::try_convert(val)?, 42);
-    /// assert_eq!(hash.get().len(), 0);
+    /// assert_eq!(hash.len(), 0);
     ///
-    /// assert!(hash.get().delete("key").is_none());
+    /// assert!(hash.delete("key").is_none());
     /// # Ok(())
     /// # }
     /// ```
@@ -240,15 +213,13 @@ impl RHash {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
     /// use solidus::convert::TryConvert;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// hash.get().insert("a", 1i64);
-    /// hash.get().insert("b", 2i64);
+    /// let mut hash = RHash::new_boxed();
+    /// hash.insert("a", 1i64);
+    /// hash.insert("b", 2i64);
     ///
     /// let mut sum = 0i64;
-    /// hash.get().each(|key, val| {
+    /// hash.each(|key, val| {
     ///     let n = i64::try_convert(val)?;
     ///     sum += n;
     ///     Ok(())
@@ -266,9 +237,7 @@ impl RHash {
         // Create a temporary array to collect key-value pairs
         // This is safer than using rb_hash_foreach which requires complex FFI callbacks
         // SAFETY: We immediately use the array and don't let it escape
-        let pairs_guard = unsafe { RArray::new() };
-        // SAFETY: We unwrap the guard to use the array throughout this function
-        let pairs = unsafe { pairs_guard.into_inner() };
+        let pairs = unsafe { RArray::new_internal() };
 
         // Use rb_hash_foreach to collect all pairs
         unsafe extern "C" fn collect_pair(
@@ -319,15 +288,13 @@ impl RHash {
     /// ```no_run
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RHash;
-    /// use solidus::pin_on_stack;
     /// use std::collections::HashMap;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(hash = unsafe { RHash::new() });
-    /// hash.get().insert("a", 1i64);
-    /// hash.get().insert("b", 2i64);
+    /// let mut hash = RHash::new_boxed();
+    /// hash.insert("a", 1i64);
+    /// hash.insert("b", 2i64);
     ///
-    /// let map: HashMap<String, i64> = hash.get().to_hash_map()?;
+    /// let map: HashMap<String, i64> = hash.to_hash_map()?;
     /// assert_eq!(map.get("a"), Some(&1));
     /// assert_eq!(map.get("b"), Some(&2));
     /// # Ok(())
@@ -350,49 +317,19 @@ impl RHash {
         Ok(map)
     }
 
-    /// Create a Ruby hash from a Rust HashMap.
-    ///
-    /// Returns a `NewValue<RHash>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`from_hash_map_boxed`](Self::from_hash_map_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RHash;
-    /// use solidus::pin_on_stack;
-    /// use std::collections::HashMap;
-    ///
-    /// let mut map = HashMap::new();
-    /// map.insert("a", 1i64);
-    /// map.insert("b", 2i64);
-    ///
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RHash::from_hash_map(map) };
-    /// pin_on_stack!(hash = guard);
-    /// assert_eq!(hash.get().len(), 2);
-    /// ```
-    pub unsafe fn from_hash_map<K, V>(map: HashMap<K, V>) -> NewValue<Self>
+    /// Internal: Create a Ruby hash from a Rust HashMap.
+    #[doc(hidden)]
+    pub(crate) unsafe fn from_hash_map_internal<K, V>(map: HashMap<K, V>) -> Self
     where
         K: IntoValue,
         V: IntoValue,
     {
-        // SAFETY: We immediately use the guard and rewrap it
-        let guard = unsafe { RHash::new() };
-        // SAFETY: We need to unwrap the guard to use the hash, then re-wrap it
-        let hash = unsafe { guard.into_inner() };
+        // SAFETY: Caller ensures the returned value is properly handled
+        let hash = unsafe { Self::new_internal() };
         for (k, v) in map {
             hash.insert(k, v);
         }
-        NewValue::new(hash)
+        hash
     }
 
     /// Create a Ruby hash from a Rust HashMap, boxed for heap storage.
@@ -418,14 +355,7 @@ impl RHash {
         V: IntoValue,
     {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::from_hash_map(map) }.into_box()
-    }
-}
-
-impl Default for RHash {
-    fn default() -> Self {
-        // SAFETY: We need to unwrap the NewValue to return Self
-        unsafe { RHash::new().into_inner() }
+        unsafe { BoxValue::new(Self::from_hash_map_internal(map)) }
     }
 }
 
@@ -478,10 +408,8 @@ where
     V: IntoValue,
 {
     fn into_value(self) -> Value {
-        // SAFETY: We immediately convert to Value
-        let guard = unsafe { RHash::from_hash_map(self) };
-        // SAFETY: We immediately convert to Value
-        unsafe { guard.into_inner().into_value() }
+        // Use the boxed version for safety
+        RHash::from_hash_map_boxed(self).as_value()
     }
 }
 
@@ -491,15 +419,15 @@ mod tests {
     use rb_sys_test_helpers::ruby_test;
 
     #[ruby_test]
-    fn test_rhash_new() {
-        let hash = RHash::new();
+    fn test_rhash_new_boxed() {
+        let hash = RHash::new_boxed();
         assert_eq!(hash.len(), 0);
         assert!(hash.is_empty());
     }
 
     #[ruby_test]
     fn test_rhash_insert_and_get() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("key", 42i64);
 
         assert_eq!(hash.len(), 1);
@@ -511,13 +439,13 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_get_missing() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         assert!(hash.get("missing").is_none());
     }
 
     #[ruby_test]
     fn test_rhash_insert_update() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("key", 1i64);
         assert_eq!(hash.len(), 1);
 
@@ -530,7 +458,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_multiple_keys() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("a", 1i64);
         hash.insert("b", 2i64);
         hash.insert("c", 3i64);
@@ -544,7 +472,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_delete() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("key", 42i64);
 
         let val = hash.delete("key").unwrap();
@@ -554,13 +482,13 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_delete_missing() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         assert!(hash.delete("missing").is_none());
     }
 
     #[ruby_test]
     fn test_rhash_delete_twice() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("key", 42i64);
 
         hash.delete("key");
@@ -569,7 +497,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_each() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("a", 1i64);
         hash.insert("b", 2i64);
         hash.insert("c", 3i64);
@@ -587,7 +515,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_each_empty() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         let mut count = 0;
         hash.each(|_, _| {
             count += 1;
@@ -601,7 +529,7 @@ mod tests {
     fn test_rhash_each_with_keys() {
         use crate::types::RString;
 
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("a", 1i64);
         hash.insert("b", 2i64);
 
@@ -620,7 +548,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_each_error() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("a", 1i64);
 
         let result = hash.each(|_, _| Err(Error::type_error("test error")));
@@ -629,7 +557,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_try_convert() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("key", 42i64);
 
         let val = hash.into_value();
@@ -645,7 +573,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_to_hash_map() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("a", 1i64);
         hash.insert("b", 2i64);
 
@@ -656,12 +584,12 @@ mod tests {
     }
 
     #[ruby_test]
-    fn test_rhash_from_hash_map() {
+    fn test_rhash_from_hash_map_boxed() {
         let mut map = HashMap::new();
         map.insert("a", 1i64);
         map.insert("b", 2i64);
 
-        let hash = RHash::from_hash_map(map);
+        let hash = RHash::from_hash_map_boxed(map);
         assert_eq!(hash.len(), 2);
 
         assert_eq!(i64::try_convert(hash.get("a").unwrap()).unwrap(), 1);
@@ -683,17 +611,10 @@ mod tests {
     }
 
     #[ruby_test]
-    fn test_rhash_default() {
-        let hash = RHash::default();
-        assert_eq!(hash.len(), 0);
-        assert!(hash.is_empty());
-    }
-
-    #[ruby_test]
     fn test_rhash_mixed_types() {
         use crate::types::{RString, Symbol};
 
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert("string_key", 42i64);
         hash.insert(Symbol::new("symbol_key"), "value");
         hash.insert(123i64, true);
@@ -718,11 +639,11 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_nested() {
-        let inner = RHash::new();
+        let inner = RHash::new_boxed();
         inner.insert("inner_key", 99i64);
 
-        let outer = RHash::new();
-        outer.insert("outer_key", inner);
+        let outer = RHash::new_boxed();
+        outer.insert("outer_key", inner.as_value());
 
         assert_eq!(outer.len(), 1);
 
@@ -736,7 +657,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rhash_with_integer_keys() {
-        let hash = RHash::new();
+        let hash = RHash::new_boxed();
         hash.insert(1i64, "one");
         hash.insert(2i64, "two");
         hash.insert(3i64, "three");

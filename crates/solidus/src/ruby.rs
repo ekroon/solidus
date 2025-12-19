@@ -328,12 +328,14 @@ impl Ruby {
     /// # Example
     ///
     /// ```no_run
-    /// use solidus::{function, Ruby, NewValue, Error};
+    /// use solidus::{function, Ruby, Error};
+    /// use solidus::Context;
+    /// use solidus::value::StackPinned;
     /// use solidus::types::RString;
+    /// use std::pin::Pin;
     ///
-    /// fn greet() -> Result<NewValue<RString>, Error> {
-    ///     // SAFETY: Value is immediately returned to Ruby
-    ///     Ok(unsafe { RString::new("Hello, World!") })
+    /// fn greet<'a>(ctx: &'a Context) -> Result<Pin<&'a StackPinned<RString>>, Error> {
+    ///     Ok(ctx.new_string("Hello, World!")?)
     /// }
     ///
     /// let ruby = unsafe { Ruby::get() };

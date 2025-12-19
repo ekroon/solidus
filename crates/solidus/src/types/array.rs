@@ -2,66 +2,49 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{BoxValue, NewValue, ReprValue, Value};
+use crate::value::{BoxValue, ReprValue, Value};
 
 /// Ruby Array (heap allocated).
 ///
 /// Ruby arrays are dynamic, heterogeneous arrays that can contain any Ruby values.
 /// These are heap-allocated objects that require GC protection.
 ///
+/// Values should be created via `Context::new_array()` for stack-pinned arrays
+/// within methods, or `RArray::new_boxed()` for heap-allocated arrays.
+///
 /// # Example
 ///
 /// ```no_run
 /// use solidus::types::RArray;
-/// use solidus::pin_on_stack;
 ///
-/// // SAFETY: Value is immediately pinned
-/// pin_on_stack!(arr = unsafe { RArray::new() });
-/// arr.get().push(42i64);
-/// arr.get().push("hello");
-/// assert_eq!(arr.get().len(), 2);
+/// // For heap storage, use new_boxed()
+/// let mut arr = RArray::new_boxed();
+/// arr.push(42i64);
+/// arr.push("hello");
+/// assert_eq!(arr.len(), 2);
+///
+/// // For stack-pinned arrays in methods, use Context::new_array()
 /// ```
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct RArray(Value);
 
 impl RArray {
-    /// Create a new empty Ruby array.
+    /// Internal: Create a new empty Ruby array.
     ///
-    /// Returns a `NewValue<RArray>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`new_boxed`](Self::new_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
-    ///
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RArray::new() };
-    /// pin_on_stack!(arr = guard);
-    /// assert_eq!(arr.get().len(), 0);
-    /// assert!(arr.get().is_empty());
-    /// ```
-    pub unsafe fn new() -> NewValue<Self> {
+    /// Users should use `Context::new_array()` or `RArray::new_boxed()` instead.
+    #[doc(hidden)]
+    pub(crate) unsafe fn new_internal() -> Self {
         // SAFETY: rb_ary_new creates a new Ruby array
         let val = unsafe { rb_sys::rb_ary_new() };
         // SAFETY: rb_ary_new returns a valid VALUE
-        NewValue::new(RArray(unsafe { Value::from_raw(val) }))
+        RArray(unsafe { Value::from_raw(val) })
     }
 
     /// Create a new empty Ruby array, boxed for heap storage.
     ///
     /// This is safe because the value is immediately registered with Ruby's GC.
+    /// Use `Context::new_array()` for stack-pinned arrays within methods.
     ///
     /// # Example
     ///
@@ -74,45 +57,22 @@ impl RArray {
     /// ```
     pub fn new_boxed() -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::new() }.into_box()
+        unsafe { BoxValue::new(Self::new_internal()) }
     }
 
-    /// Create a new Ruby array with the specified capacity.
-    ///
-    /// This pre-allocates space for `capacity` elements, which can improve
-    /// performance when you know how many elements you'll add.
-    ///
-    /// Returns a `NewValue<RArray>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`with_capacity_boxed`](Self::with_capacity_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
-    ///
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RArray::with_capacity(100) };
-    /// pin_on_stack!(arr = guard);
-    /// assert_eq!(arr.get().len(), 0);
-    /// ```
-    pub unsafe fn with_capacity(capacity: usize) -> NewValue<Self> {
+    /// Internal: Create a new Ruby array with capacity.
+    #[doc(hidden)]
+    pub(crate) unsafe fn with_capacity_internal(capacity: usize) -> Self {
         // SAFETY: rb_ary_new_capa creates a new Ruby array with the given capacity
         let val = unsafe { rb_sys::rb_ary_new_capa(capacity as _) };
         // SAFETY: rb_ary_new_capa returns a valid VALUE
-        NewValue::new(RArray(unsafe { Value::from_raw(val) }))
+        RArray(unsafe { Value::from_raw(val) })
     }
 
     /// Create a new Ruby array with the specified capacity, boxed for heap storage.
+    ///
+    /// This pre-allocates space for `capacity` elements, which can improve
+    /// performance when you know how many elements you'll add.
     ///
     /// This is safe because the value is immediately registered with Ruby's GC.
     ///
@@ -126,7 +86,7 @@ impl RArray {
     /// ```
     pub fn with_capacity_boxed(capacity: usize) -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::with_capacity(capacity) }.into_box()
+        unsafe { BoxValue::new(Self::with_capacity_internal(capacity)) }
     }
 
     /// Get the number of elements in the array.
@@ -135,13 +95,11 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().push(1);
-    /// arr.get().push(2);
-    /// assert_eq!(arr.get().len(), 2);
+    /// let mut arr = RArray::new_boxed();
+    /// arr.push(1);
+    /// arr.push(2);
+    /// assert_eq!(arr.len(), 2);
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
@@ -155,14 +113,12 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// assert!(arr.get().is_empty());
+    /// let mut arr = RArray::new_boxed();
+    /// assert!(arr.is_empty());
     ///
-    /// arr.get().push(1);
-    /// assert!(!arr.get().is_empty());
+    /// arr.push(1);
+    /// assert!(!arr.is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -177,13 +133,11 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().push(42i64);
-    /// arr.get().push("hello");
-    /// assert_eq!(arr.get().len(), 2);
+    /// let mut arr = RArray::new_boxed();
+    /// arr.push(42i64);
+    /// arr.push("hello");
+    /// assert_eq!(arr.len(), 2);
     /// ```
     pub fn push<T: IntoValue>(&self, value: T) {
         let val = value.into_value();
@@ -201,15 +155,13 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().push(1);
-    /// arr.get().push(2);
+    /// let mut arr = RArray::new_boxed();
+    /// arr.push(1);
+    /// arr.push(2);
     ///
-    /// let val = arr.get().pop().unwrap();
-    /// assert_eq!(arr.get().len(), 1);
+    /// let val = arr.pop().unwrap();
+    /// assert_eq!(arr.len(), 1);
     /// ```
     pub fn pop(&self) -> Option<Value> {
         if self.is_empty() {
@@ -234,16 +186,14 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().push(10);
-    /// arr.get().push(20);
-    /// arr.get().push(30);
+    /// let mut arr = RArray::new_boxed();
+    /// arr.push(10);
+    /// arr.push(20);
+    /// arr.push(30);
     ///
-    /// let val = arr.get().entry(1);
-    /// let val_neg = arr.get().entry(-1); // Last element
+    /// let val = arr.entry(1);
+    /// let val_neg = arr.entry(-1); // Last element
     /// ```
     pub fn entry(&self, index: isize) -> Value {
         // SAFETY: self.0 is a valid Ruby array, rb_ary_entry handles bounds checking
@@ -261,13 +211,11 @@ impl RArray {
     ///
     /// ```no_run
     /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().store(0, 42);
-    /// arr.get().store(1, "hello");
-    /// arr.get().store(-1, "world"); // Replaces last element
+    /// let mut arr = RArray::new_boxed();
+    /// arr.store(0, 42);
+    /// arr.store(1, "hello");
+    /// arr.store(-1, "world"); // Replaces last element
     /// ```
     pub fn store<T: IntoValue>(&self, index: isize, value: T) {
         let val = value.into_value();
@@ -295,16 +243,14 @@ impl RArray {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RArray;
     /// use solidus::convert::TryConvert;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().push(1);
-    /// arr.get().push(2);
-    /// arr.get().push(3);
+    /// let mut arr = RArray::new_boxed();
+    /// arr.push(1);
+    /// arr.push(2);
+    /// arr.push(3);
     ///
     /// let mut sum = 0i64;
-    /// arr.get().each(|val| {
+    /// arr.each(|val| {
     ///     let n = i64::try_convert(val)?;
     ///     sum += n;
     ///     Ok(())
@@ -325,40 +271,15 @@ impl RArray {
         Ok(())
     }
 
-    /// Create a Ruby array from a Rust slice.
-    ///
-    /// Returns a `NewValue<RArray>` that must be pinned on the stack
-    /// or boxed on the heap for GC safety.
-    ///
-    /// # Safety
-    ///
-    /// The returned `NewValue` must be immediately consumed by either:
-    /// - `pin_on_stack!` macro to pin on the stack
-    /// - `.into_box()` to box for heap storage
-    ///
-    /// Failure to do so may result in the value being garbage collected.
-    /// For a safe alternative, use [`from_slice_boxed`](Self::from_slice_boxed).
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use solidus::types::RArray;
-    /// use solidus::pin_on_stack;
-    ///
-    /// // SAFETY: We immediately pin the value
-    /// let guard = unsafe { RArray::from_slice(&[1, 2, 3, 4, 5]) };
-    /// pin_on_stack!(arr = guard);
-    /// assert_eq!(arr.get().len(), 5);
-    /// ```
-    pub unsafe fn from_slice<T: IntoValue + Copy>(slice: &[T]) -> NewValue<Self> {
-        // SAFETY: We immediately use the guard and rewrap it
-        let guard = unsafe { RArray::with_capacity(slice.len()) };
-        // SAFETY: We need to unwrap the guard to use the array, then re-wrap it
-        let arr = unsafe { guard.into_inner() };
+    /// Internal: Create a Ruby array from a Rust slice.
+    #[doc(hidden)]
+    pub(crate) unsafe fn from_slice_internal<T: IntoValue + Copy>(slice: &[T]) -> Self {
+        // SAFETY: Caller ensures the returned value is properly handled
+        let arr = unsafe { Self::with_capacity_internal(slice.len()) };
         for &item in slice {
             arr.push(item);
         }
-        NewValue::new(arr)
+        arr
     }
 
     /// Create a Ruby array from a Rust slice, boxed for heap storage.
@@ -375,7 +296,7 @@ impl RArray {
     /// ```
     pub fn from_slice_boxed<T: IntoValue + Copy>(slice: &[T]) -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { Self::from_slice(slice) }.into_box()
+        unsafe { BoxValue::new(Self::from_slice_internal(slice)) }
     }
 
     /// Convert this array to a Rust Vec.
@@ -389,15 +310,13 @@ impl RArray {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use solidus::types::RArray;
     /// use solidus::convert::TryConvert;
-    /// use solidus::pin_on_stack;
     ///
-    /// // SAFETY: Value is immediately pinned
-    /// pin_on_stack!(arr = unsafe { RArray::new() });
-    /// arr.get().push(1);
-    /// arr.get().push(2);
-    /// arr.get().push(3);
+    /// let mut arr = RArray::new_boxed();
+    /// arr.push(1);
+    /// arr.push(2);
+    /// arr.push(3);
     ///
-    /// let vec: Vec<i64> = arr.get().to_vec()?;
+    /// let vec: Vec<i64> = arr.to_vec()?;
     /// assert_eq!(vec, vec![1, 2, 3]);
     /// # Ok(())
     /// # }
@@ -410,13 +329,6 @@ impl RArray {
             vec.push(T::try_convert(val)?);
         }
         Ok(vec)
-    }
-}
-
-impl Default for RArray {
-    fn default() -> Self {
-        // SAFETY: We unwrap the NewValue to return Self
-        unsafe { RArray::new().into_inner() }
     }
 }
 
@@ -460,20 +372,16 @@ impl<T: TryConvert> TryConvert for Vec<T> {
 
 impl<T: IntoValue + Copy> IntoValue for Vec<T> {
     fn into_value(self) -> Value {
-        // SAFETY: We immediately convert to Value
-        let guard = unsafe { RArray::from_slice(&self) };
-        // SAFETY: We immediately convert to Value
-        unsafe { guard.into_inner().into_value() }
+        // Use the boxed version for safety
+        RArray::from_slice_boxed(&self).as_value()
     }
 }
 
 // Also implement for slices
 impl<T: IntoValue + Copy> IntoValue for &[T] {
     fn into_value(self) -> Value {
-        // SAFETY: We immediately convert to Value
-        let guard = unsafe { RArray::from_slice(self) };
-        // SAFETY: We immediately convert to Value
-        unsafe { guard.into_inner().into_value() }
+        // Use the boxed version for safety
+        RArray::from_slice_boxed(self).as_value()
     }
 }
 
@@ -483,22 +391,22 @@ mod tests {
     use rb_sys_test_helpers::ruby_test;
 
     #[ruby_test]
-    fn test_rarray_new() {
-        let arr = RArray::new();
+    fn test_rarray_new_boxed() {
+        let arr = RArray::new_boxed();
         assert_eq!(arr.len(), 0);
         assert!(arr.is_empty());
     }
 
     #[ruby_test]
-    fn test_rarray_with_capacity() {
-        let arr = RArray::with_capacity(100);
+    fn test_rarray_with_capacity_boxed() {
+        let arr = RArray::with_capacity_boxed(100);
         assert_eq!(arr.len(), 0);
         assert!(arr.is_empty());
     }
 
     #[ruby_test]
     fn test_rarray_push() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(42i64);
         assert_eq!(arr.len(), 1);
         assert!(!arr.is_empty());
@@ -509,7 +417,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_pop() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(1i64);
         arr.push(2i64);
         arr.push(3i64);
@@ -525,13 +433,13 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_pop_empty() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         assert!(arr.pop().is_none());
     }
 
     #[ruby_test]
     fn test_rarray_entry() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(10i64);
         arr.push(20i64);
         arr.push(30i64);
@@ -548,7 +456,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_entry_negative() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(10i64);
         arr.push(20i64);
         arr.push(30i64);
@@ -565,7 +473,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_entry_out_of_bounds() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(10i64);
 
         let val = arr.entry(5);
@@ -577,7 +485,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_store() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.store(0, 42i64);
         assert_eq!(arr.len(), 1);
 
@@ -591,7 +499,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_store_extends() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.store(5, 42i64);
         assert_eq!(arr.len(), 6);
 
@@ -606,7 +514,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_store_negative() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(1i64);
         arr.push(2i64);
         arr.push(3i64);
@@ -618,7 +526,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_each() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(1i64);
         arr.push(2i64);
         arr.push(3i64);
@@ -636,7 +544,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_each_empty() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         let mut count = 0;
         arr.each(|_| {
             count += 1;
@@ -648,7 +556,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_each_error() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(1i64);
         arr.push(2i64);
         arr.push(3i64);
@@ -658,9 +566,9 @@ mod tests {
     }
 
     #[ruby_test]
-    fn test_rarray_from_slice() {
+    fn test_rarray_from_slice_boxed() {
         let slice = &[1i64, 2, 3, 4, 5];
-        let arr = RArray::from_slice(slice);
+        let arr = RArray::from_slice_boxed(slice);
         assert_eq!(arr.len(), 5);
 
         for (i, &expected) in slice.iter().enumerate() {
@@ -671,7 +579,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_to_vec() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(1i64);
         arr.push(2i64);
         arr.push(3i64);
@@ -682,7 +590,7 @@ mod tests {
 
     #[ruby_test]
     fn test_rarray_try_convert() {
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(1i64);
 
         let val = arr.into_value();
@@ -718,9 +626,9 @@ mod tests {
     fn test_rarray_mixed_types() {
         use crate::types::RString;
 
-        let arr = RArray::new();
+        let arr = RArray::new_boxed();
         arr.push(42i64);
-        arr.push(RString::new("hello"));
+        arr.push(RString::new_boxed("hello").as_value());
         arr.push(true);
 
         assert_eq!(arr.len(), 3);
@@ -737,20 +645,13 @@ mod tests {
     }
 
     #[ruby_test]
-    fn test_rarray_default() {
-        let arr = RArray::default();
-        assert_eq!(arr.len(), 0);
-        assert!(arr.is_empty());
-    }
-
-    #[ruby_test]
     fn test_rarray_nested() {
-        let inner = RArray::new();
+        let inner = RArray::new_boxed();
         inner.push(1i64);
         inner.push(2i64);
 
-        let outer = RArray::new();
-        outer.push(inner);
+        let outer = RArray::new_boxed();
+        outer.push(inner.as_value());
         outer.push(3i64);
 
         assert_eq!(outer.len(), 2);

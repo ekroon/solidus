@@ -23,25 +23,20 @@
 //!
 //! ## Creating Values
 //!
-//! When you create a Ruby value, you get a `NewValue<T>` that must be either:
-//! - Pinned on the stack with `pin_on_stack!` (common case)
-//! - Boxed for heap storage with `.into_box()` (explicit GC registration)
+//! There are two main ways to create Ruby values:
+//!
+//! 1. **Inside methods**: Use the `Context` parameter provided by the `method!`/`function!` macros
+//! 2. **For collections**: Use `*_boxed()` methods which immediately register with Ruby's GC
 //!
 //! ```no_run
 //! use solidus::prelude::*;
 //!
-//! // Option 1: Pin on stack (fast, common case)
-//! // SAFETY: Value is immediately pinned
-//! pin_on_stack!(s = unsafe { RString::new("hello") });
-//! // s is Pin<&StackPinned<RString>>, cannot be moved to heap
-//!
-//! // Option 2: Box for heap storage (for collections)
+//! // For heap storage (collections), use the *_boxed() methods
 //! let boxed = RArray::new_boxed();  // Safe - immediately GC-registered
 //! let mut values = vec![boxed];  // Safe! GC knows about it
-//! ```
 //!
-//! The `#[must_use]` attribute on `NewValue` means the compiler warns if you
-//! forget to pin or box a value.
+//! // Inside methods, use Context (see Method Registration below)
+//! ```
 //!
 //! # Core Types
 //!
@@ -54,18 +49,18 @@
 //!
 //! # Method Registration
 //!
-//! Define Rust functions as Ruby methods using `method!` or `function!` macros:
+//! Define Rust functions as Ruby methods using `method!` or `function!` macros.
+//! Methods receive a `&Context` as their first parameter for creating new Ruby values:
 //!
 //! ```no_run
 //! use solidus::prelude::*;
 //! use solidus::method;
 //!
-//! // Method that takes pinned arguments
-//! fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+//! // Method that creates a new string using Context
+//! fn concat<'a>(ctx: &'a Context, rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<Pin<&'a StackPinned<RString>>, Error> {
 //!     let self_str = rb_self.to_string()?;
 //!     let other_str = other.get().to_string()?;
-//!     // SAFETY: Value is immediately returned to Ruby
-//!     Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
+//!     Ok(ctx.new_string(&format!("{}{}", self_str, other_str))?)
 //! }
 //!
 //! // Initialize the extension
