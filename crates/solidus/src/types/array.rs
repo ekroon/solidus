@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{NewValue, ReprValue, Value};
+use crate::value::{BoxValue, NewValue, ReprValue, Value};
 
 /// Ruby Array (heap allocated).
 ///
@@ -29,22 +29,50 @@ impl RArray {
     /// Returns a `NewValue<RArray>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`new_boxed`](Self::new_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
     /// use solidus::types::RArray;
     /// use solidus::pin_on_stack;
     ///
-    /// let guard = RArray::new();
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RArray::new() };
     /// pin_on_stack!(arr = guard);
     /// assert_eq!(arr.get().len(), 0);
     /// assert!(arr.get().is_empty());
     /// ```
-    pub fn new() -> NewValue<Self> {
+    pub unsafe fn new() -> NewValue<Self> {
         // SAFETY: rb_ary_new creates a new Ruby array
         let val = unsafe { rb_sys::rb_ary_new() };
         // SAFETY: rb_ary_new returns a valid VALUE
         NewValue::new(RArray(unsafe { Value::from_raw(val) }))
+    }
+
+    /// Create a new empty Ruby array, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RArray;
+    ///
+    /// let boxed = RArray::new_boxed();
+    /// assert_eq!(boxed.len(), 0);
+    /// assert!(boxed.is_empty());
+    /// ```
+    pub fn new_boxed() -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::new() }.into_box()
     }
 
     /// Create a new Ruby array with the specified capacity.
@@ -55,21 +83,48 @@ impl RArray {
     /// Returns a `NewValue<RArray>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`with_capacity_boxed`](Self::with_capacity_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
     /// use solidus::types::RArray;
     /// use solidus::pin_on_stack;
     ///
-    /// let guard = RArray::with_capacity(100);
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RArray::with_capacity(100) };
     /// pin_on_stack!(arr = guard);
     /// assert_eq!(arr.get().len(), 0);
     /// ```
-    pub fn with_capacity(capacity: usize) -> NewValue<Self> {
+    pub unsafe fn with_capacity(capacity: usize) -> NewValue<Self> {
         // SAFETY: rb_ary_new_capa creates a new Ruby array with the given capacity
         let val = unsafe { rb_sys::rb_ary_new_capa(capacity as _) };
         // SAFETY: rb_ary_new_capa returns a valid VALUE
         NewValue::new(RArray(unsafe { Value::from_raw(val) }))
+    }
+
+    /// Create a new Ruby array with the specified capacity, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RArray;
+    ///
+    /// let boxed = RArray::with_capacity_boxed(100);
+    /// assert_eq!(boxed.len(), 0);
+    /// ```
+    pub fn with_capacity_boxed(capacity: usize) -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::with_capacity(capacity) }.into_box()
     }
 
     /// Get the number of elements in the array.
@@ -259,24 +314,52 @@ impl RArray {
     /// Returns a `NewValue<RArray>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`from_slice_boxed`](Self::from_slice_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
     /// use solidus::types::RArray;
     /// use solidus::pin_on_stack;
     ///
-    /// let guard = RArray::from_slice(&[1, 2, 3, 4, 5]);
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RArray::from_slice(&[1, 2, 3, 4, 5]) };
     /// pin_on_stack!(arr = guard);
     /// assert_eq!(arr.get().len(), 5);
     /// ```
-    pub fn from_slice<T: IntoValue + Copy>(slice: &[T]) -> NewValue<Self> {
-        let guard = RArray::with_capacity(slice.len());
+    pub unsafe fn from_slice<T: IntoValue + Copy>(slice: &[T]) -> NewValue<Self> {
+        // SAFETY: We immediately use the guard and rewrap it
+        let guard = unsafe { RArray::with_capacity(slice.len()) };
         // SAFETY: We need to unwrap the guard to use the array, then re-wrap it
         let arr = unsafe { guard.into_inner() };
         for &item in slice {
             arr.push(item);
         }
         NewValue::new(arr)
+    }
+
+    /// Create a Ruby array from a Rust slice, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RArray;
+    ///
+    /// let boxed = RArray::from_slice_boxed(&[1, 2, 3, 4, 5]);
+    /// assert_eq!(boxed.len(), 5);
+    /// ```
+    pub fn from_slice_boxed<T: IntoValue + Copy>(slice: &[T]) -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::from_slice(slice) }.into_box()
     }
 
     /// Convert this array to a Rust Vec.
@@ -359,7 +442,8 @@ impl<T: TryConvert> TryConvert for Vec<T> {
 
 impl<T: IntoValue + Copy> IntoValue for Vec<T> {
     fn into_value(self) -> Value {
-        let guard = RArray::from_slice(&self);
+        // SAFETY: We immediately convert to Value
+        let guard = unsafe { RArray::from_slice(&self) };
         // SAFETY: We immediately convert to Value
         unsafe { guard.into_inner().into_value() }
     }
@@ -368,7 +452,8 @@ impl<T: IntoValue + Copy> IntoValue for Vec<T> {
 // Also implement for slices
 impl<T: IntoValue + Copy> IntoValue for &[T] {
     fn into_value(self) -> Value {
-        let guard = RArray::from_slice(self);
+        // SAFETY: We immediately convert to Value
+        let guard = unsafe { RArray::from_slice(self) };
         // SAFETY: We immediately convert to Value
         unsafe { guard.into_inner().into_value() }
     }

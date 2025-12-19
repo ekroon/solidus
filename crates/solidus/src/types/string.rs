@@ -4,7 +4,7 @@ use std::ffi::CStr;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{NewValue, ReprValue, Value};
+use crate::value::{BoxValue, NewValue, ReprValue, Value};
 
 /// Ruby String (heap allocated).
 ///
@@ -33,18 +33,46 @@ impl RString {
     /// Returns a `NewValue<RString>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`new_boxed`](Self::new_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
     /// use solidus::types::RString;
     /// use solidus::pin_on_stack;
     ///
-    /// let guard = RString::new("hello world");
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RString::new("hello world") };
     /// pin_on_stack!(s = guard);
     /// assert_eq!(s.get().len(), 11);
     /// ```
-    pub fn new(s: &str) -> NewValue<Self> {
-        Self::from_slice(s.as_bytes())
+    pub unsafe fn new(s: &str) -> NewValue<Self> {
+        // SAFETY: Caller ensures the returned value is immediately pinned or boxed
+        unsafe { Self::from_slice(s.as_bytes()) }
+    }
+
+    /// Create a new Ruby string, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RString;
+    ///
+    /// let boxed = RString::new_boxed("hello world");
+    /// assert_eq!(boxed.len(), 11);
+    /// ```
+    pub fn new_boxed(s: &str) -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::new(s) }.into_box()
     }
 
     /// Create a new Ruby string from a byte slice.
@@ -54,6 +82,15 @@ impl RString {
     /// Returns a `NewValue<RString>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`from_slice_boxed`](Self::from_slice_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -61,11 +98,12 @@ impl RString {
     /// use solidus::pin_on_stack;
     ///
     /// let bytes = b"hello\x00world";
-    /// let guard = RString::from_slice(bytes);
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RString::from_slice(bytes) };
     /// pin_on_stack!(s = guard);
     /// assert_eq!(s.get().len(), 11);
     /// ```
-    pub fn from_slice(bytes: &[u8]) -> NewValue<Self> {
+    pub unsafe fn from_slice(bytes: &[u8]) -> NewValue<Self> {
         // SAFETY: rb_str_new creates a new Ruby string with the given bytes
         let val = unsafe {
             rb_sys::rb_str_new(
@@ -75,6 +113,24 @@ impl RString {
         };
         // SAFETY: rb_str_new returns a valid VALUE
         NewValue::new(RString(unsafe { Value::from_raw(val) }))
+    }
+
+    /// Create a new Ruby string from bytes, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RString;
+    ///
+    /// let bytes = b"hello\x00world";
+    /// let boxed = RString::from_slice_boxed(bytes);
+    /// assert_eq!(boxed.len(), 11);
+    /// ```
+    pub fn from_slice_boxed(bytes: &[u8]) -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::from_slice(bytes) }.into_box()
     }
 
     /// Get the length of the string in bytes.
@@ -267,7 +323,8 @@ impl TryConvert for String {
 
 impl IntoValue for String {
     fn into_value(self) -> Value {
-        let guard = RString::new(&self);
+        // SAFETY: We immediately convert to Value
+        let guard = unsafe { RString::new(&self) };
         // SAFETY: We immediately convert to Value
         unsafe { guard.into_inner().into_value() }
     }
@@ -276,7 +333,8 @@ impl IntoValue for String {
 // Convert string slices to Ruby strings
 impl IntoValue for &str {
     fn into_value(self) -> Value {
-        let guard = RString::new(self);
+        // SAFETY: We immediately convert to Value
+        let guard = unsafe { RString::new(self) };
         // SAFETY: We immediately convert to Value
         unsafe { guard.into_inner().into_value() }
     }

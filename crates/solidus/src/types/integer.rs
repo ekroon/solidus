@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{NewValue, ReprValue, Value};
+use crate::value::{BoxValue, NewValue, ReprValue, Value};
 
 /// Small integer that fits in a VALUE (immediate value).
 ///
@@ -306,7 +306,16 @@ impl RBignum {
     ///
     /// Returns a `NewValue<RBignum>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
-    pub fn from_i64(n: i64) -> Option<NewValue<Self>> {
+    ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`from_i64_boxed`](Self::from_i64_boxed).
+    pub unsafe fn from_i64(n: i64) -> Option<NewValue<Self>> {
         // SAFETY: rb_ll2inum creates a Ruby integer (Fixnum or Bignum)
         let val = unsafe { rb_sys::rb_ll2inum(n as ::std::os::raw::c_longlong) };
         let val = unsafe { Value::from_raw(val) };
@@ -319,6 +328,15 @@ impl RBignum {
         }
     }
 
+    /// Create an RBignum from an i64, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    /// Returns None if the value fits in a Fixnum.
+    pub fn from_i64_boxed(n: i64) -> Option<BoxValue<Self>> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::from_i64(n) }.map(|nv| nv.into_box())
+    }
+
     /// Create an RBignum from a u64.
     ///
     /// This uses Ruby's integer creation function which may return a Fixnum
@@ -327,7 +345,16 @@ impl RBignum {
     ///
     /// Returns a `NewValue<RBignum>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
-    pub fn from_u64(n: u64) -> Option<NewValue<Self>> {
+    ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`from_u64_boxed`](Self::from_u64_boxed).
+    pub unsafe fn from_u64(n: u64) -> Option<NewValue<Self>> {
         // SAFETY: rb_ull2inum creates a Ruby integer (Fixnum or Bignum)
         let val = unsafe { rb_sys::rb_ull2inum(n as ::std::os::raw::c_ulonglong) };
         let val = unsafe { Value::from_raw(val) };
@@ -338,6 +365,15 @@ impl RBignum {
         } else {
             None
         }
+    }
+
+    /// Create an RBignum from a u64, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    /// Returns None if the value fits in a Fixnum.
+    pub fn from_u64_boxed(n: u64) -> Option<BoxValue<Self>> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::from_u64(n) }.map(|nv| nv.into_box())
     }
 
     /// Convert to i64.

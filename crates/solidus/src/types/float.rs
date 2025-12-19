@@ -2,7 +2,7 @@
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{NewValue, ReprValue, Value, ValueType};
+use crate::value::{BoxValue, NewValue, ReprValue, Value, ValueType};
 
 /// Immediate float value (only on 64-bit platforms).
 ///
@@ -110,10 +110,36 @@ impl RFloat {
     ///
     /// Returns a `NewValue<RFloat>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
-    pub fn from_f64(n: f64) -> NewValue<Self> {
+    ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`from_f64_boxed`](Self::from_f64_boxed).
+    pub unsafe fn from_f64(n: f64) -> NewValue<Self> {
         // SAFETY: rb_float_new creates a Float VALUE
         let val = unsafe { Value::from_raw(rb_sys::rb_float_new(n)) };
         NewValue::new(RFloat(val))
+    }
+
+    /// Create an RFloat from an f64, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RFloat;
+    ///
+    /// let boxed = RFloat::from_f64_boxed(3.14159265358979);
+    /// assert!((boxed.to_f64() - 3.14159265358979).abs() < 0.0000001);
+    /// ```
+    pub fn from_f64_boxed(n: f64) -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::from_f64(n) }.into_box()
     }
 
     /// Get the value as f64.
@@ -190,13 +216,13 @@ impl Float {
             if let Some(flonum) = Flonum::from_f64(n) {
                 Float::Flonum(flonum)
             } else {
-                // SAFETY: We need to unwrap the NewValue to return Self
+                // SAFETY: We immediately unwrap the NewValue to return Self
                 Float::RFloat(unsafe { RFloat::from_f64(n).into_inner() })
             }
         }
         #[cfg(not(target_pointer_width = "64"))]
         {
-            // SAFETY: We need to unwrap the NewValue to return Self
+            // SAFETY: We immediately unwrap the NewValue to return Self
             Float::RFloat(unsafe { RFloat::from_f64(n).into_inner() })
         }
     }

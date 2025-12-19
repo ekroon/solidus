@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{NewValue, ReprValue, Value};
+use crate::value::{BoxValue, NewValue, ReprValue, Value};
 
 /// Ruby Hash (heap allocated).
 ///
@@ -30,22 +30,50 @@ impl RHash {
     /// Returns a `NewValue<RHash>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`new_boxed`](Self::new_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
     /// use solidus::types::RHash;
     /// use solidus::pin_on_stack;
     ///
-    /// let guard = RHash::new();
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RHash::new() };
     /// pin_on_stack!(hash = guard);
     /// assert_eq!(hash.get().len(), 0);
     /// assert!(hash.get().is_empty());
     /// ```
-    pub fn new() -> NewValue<Self> {
+    pub unsafe fn new() -> NewValue<Self> {
         // SAFETY: rb_hash_new creates a new Ruby hash
         let val = unsafe { rb_sys::rb_hash_new() };
         // SAFETY: rb_hash_new returns a valid VALUE
         NewValue::new(RHash(unsafe { Value::from_raw(val) }))
+    }
+
+    /// Create a new empty Ruby hash, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RHash;
+    ///
+    /// let boxed = RHash::new_boxed();
+    /// assert_eq!(boxed.len(), 0);
+    /// assert!(boxed.is_empty());
+    /// ```
+    pub fn new_boxed() -> BoxValue<Self> {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::new() }.into_box()
     }
 
     /// Get the number of key-value pairs in the hash.
@@ -223,7 +251,8 @@ impl RHash {
 
         // Create a temporary array to collect key-value pairs
         // This is safer than using rb_hash_foreach which requires complex FFI callbacks
-        let pairs_guard = RArray::new();
+        // SAFETY: We immediately use the array and don't let it escape
+        let pairs_guard = unsafe { RArray::new() };
         // SAFETY: We unwrap the guard to use the array throughout this function
         let pairs = unsafe { pairs_guard.into_inner() };
 
@@ -310,6 +339,15 @@ impl RHash {
     /// Returns a `NewValue<RHash>` that must be pinned on the stack
     /// or boxed on the heap for GC safety.
     ///
+    /// # Safety
+    ///
+    /// The returned `NewValue` must be immediately consumed by either:
+    /// - `pin_on_stack!` macro to pin on the stack
+    /// - `.into_box()` to box for heap storage
+    ///
+    /// Failure to do so may result in the value being garbage collected.
+    /// For a safe alternative, use [`from_hash_map_boxed`](Self::from_hash_map_boxed).
+    ///
     /// # Example
     ///
     /// ```no_run
@@ -321,22 +359,50 @@ impl RHash {
     /// map.insert("a", 1i64);
     /// map.insert("b", 2i64);
     ///
-    /// let guard = RHash::from_hash_map(map);
+    /// // SAFETY: We immediately pin the value
+    /// let guard = unsafe { RHash::from_hash_map(map) };
     /// pin_on_stack!(hash = guard);
     /// assert_eq!(hash.get().len(), 2);
     /// ```
-    pub fn from_hash_map<K, V>(map: HashMap<K, V>) -> NewValue<Self>
+    pub unsafe fn from_hash_map<K, V>(map: HashMap<K, V>) -> NewValue<Self>
     where
         K: IntoValue,
         V: IntoValue,
     {
-        let guard = RHash::new();
+        // SAFETY: We immediately use the guard and rewrap it
+        let guard = unsafe { RHash::new() };
         // SAFETY: We need to unwrap the guard to use the hash, then re-wrap it
         let hash = unsafe { guard.into_inner() };
         for (k, v) in map {
             hash.insert(k, v);
         }
         NewValue::new(hash)
+    }
+
+    /// Create a Ruby hash from a Rust HashMap, boxed for heap storage.
+    ///
+    /// This is safe because the value is immediately registered with Ruby's GC.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RHash;
+    /// use std::collections::HashMap;
+    ///
+    /// let mut map = HashMap::new();
+    /// map.insert("a", 1i64);
+    /// map.insert("b", 2i64);
+    ///
+    /// let boxed = RHash::from_hash_map_boxed(map);
+    /// assert_eq!(boxed.len(), 2);
+    /// ```
+    pub fn from_hash_map_boxed<K, V>(map: HashMap<K, V>) -> BoxValue<Self>
+    where
+        K: IntoValue,
+        V: IntoValue,
+    {
+        // SAFETY: We immediately box and register with GC
+        unsafe { Self::from_hash_map(map) }.into_box()
     }
 }
 
@@ -396,7 +462,8 @@ where
     V: IntoValue,
 {
     fn into_value(self) -> Value {
-        let guard = RHash::from_hash_map(self);
+        // SAFETY: We immediately convert to Value
+        let guard = unsafe { RHash::from_hash_map(self) };
         // SAFETY: We immediately convert to Value
         unsafe { guard.into_inner().into_value() }
     }
