@@ -101,6 +101,7 @@ pub use rb_sys;
 pub use solidus_macros::{init, wrap};
 
 // Modules
+pub mod context;
 pub mod convert;
 pub mod error;
 pub mod gc;
@@ -111,7 +112,8 @@ pub mod types;
 pub mod value;
 
 // Re-exports for convenience
-pub use error::{Error, ExceptionClass};
+pub use context::Context;
+pub use error::{AllocationError, Error, ExceptionClass};
 pub use ruby::Ruby;
 pub use value::{BoxValue, NewValue, ReprValue, StackPinned, Value, ValueType};
 
@@ -130,8 +132,9 @@ pub use types::Flonum;
 pub mod prelude {
     pub use std::pin::Pin;
 
+    pub use crate::context::Context;
     pub use crate::convert::{IntoValue, TryConvert};
-    pub use crate::error::{Error, ExceptionClass};
+    pub use crate::error::{AllocationError, Error, ExceptionClass};
     pub use crate::init;
     pub use crate::method::{ReturnWitness, WitnessedReturn};
     pub use crate::pin_on_stack;

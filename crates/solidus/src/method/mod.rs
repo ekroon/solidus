@@ -35,6 +35,8 @@ mod return_value;
 
 pub use args::MethodArg;
 pub use return_slot::{ReturnWitness, WitnessedReturn};
+pub use return_value::IntoReturnValue;
+#[allow(deprecated)]
 pub use return_value::ReturnValue;
 
 /// Generate an extern "C" wrapper for a Ruby method.

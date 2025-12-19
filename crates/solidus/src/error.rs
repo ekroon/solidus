@@ -240,6 +240,25 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// Error returned when Context cannot allocate more stack slots.
+#[derive(Debug, Clone, Copy)]
+pub struct AllocationError;
+
+impl std::fmt::Display for AllocationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Context stack slots exhausted")
+    }
+}
+
+impl std::error::Error for AllocationError {}
+
+// Allow using ? to convert AllocationError to Error
+impl From<AllocationError> for Error {
+    fn from(_: AllocationError) -> Self {
+        Error::runtime("Context stack slots exhausted")
+    }
+}
+
 // Helper macro for C format strings
 macro_rules! c_str {
     ($s:literal) => {
