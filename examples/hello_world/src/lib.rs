@@ -9,9 +9,9 @@ use solidus::prelude::*;
 
 /// A simple function that returns a greeting.
 #[solidus_macros::function]
-fn hello() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello from Solidus!") })
+fn hello() -> Result<BoxValue<RString>, Error> {
+    // Safe: new_boxed returns a BoxValue that is GC-registered
+    Ok(RString::new_boxed("Hello from Solidus!"))
 }
 
 /// Initialize the Ruby extension.

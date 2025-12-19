@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates the core pinning concepts in Solidus:
 //! - Why pinning matters for Ruby GC safety
-//! - Stack pinning with `pin_on_stack!` macro
+//! - Stack pinning with Context for method returns
 //! - Heap boxing with `BoxValue<T>` for collections
 //! - Methods with pinned arguments `Pin<&StackPinned<T>>`
 //!
@@ -32,37 +32,42 @@ use std::pin::Pin;
 /// - It cannot be moved to the heap accidentally
 ///
 /// Use `.get()` to access the inner `&RString`.
-fn process_pinned_string(input: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn process_pinned_string<'ctx>(
+    ctx: &'ctx Context,
+    input: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let content = input.get().to_string()?;
     let processed = content.to_uppercase();
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Processed: {}", processed)) })
+    ctx.new_string(&format!("Processed: {}", processed))
+        .map_err(Into::into)
 }
 
 /// Function with multiple pinned arguments.
 ///
 /// Each pinned argument is independently protected on the stack.
-fn concatenate_pinned(
+fn concatenate_pinned<'ctx>(
+    ctx: &'ctx Context,
     first: Pin<&StackPinned<RString>>,
     second: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let s1 = first.get().to_string()?;
     let s2 = second.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{}{}", s1, s2)) })
+    ctx.new_string(&format!("{}{}", s1, s2))
+        .map_err(Into::into)
 }
 
 /// Instance method example - uses `self` as first argument.
 ///
 /// When registered with `method!`, the first argument receives `self`.
-fn append_to_self(
+fn append_to_self<'ctx>(
+    ctx: &'ctx Context,
     rb_self: RString,
     suffix: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let self_str = rb_self.to_string()?;
     let suffix_str = suffix.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{}{}", self_str, suffix_str)) })
+    ctx.new_string(&format!("{}{}", self_str, suffix_str))
+        .map_err(Into::into)
 }
 
 // ============================================================================
@@ -78,11 +83,13 @@ fn append_to_self(
 /// - Storing values in Vec, HashMap, etc.
 /// - Caching Ruby values in Rust structs
 /// - Keeping values alive across async boundaries
-fn create_boxed_string(content: Pin<&StackPinned<RString>>) -> Result<BoxValue<RString>, Error> {
+fn create_boxed_string<'ctx>(
+    ctx: &'ctx Context,
+    content: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let text = content.get().to_string()?;
-    // SAFETY: Value is immediately boxed for heap storage
-    let new_val = unsafe { RString::new(&format!("Boxed: {}", text)) };
-    Ok(new_val.into_box())
+    ctx.new_string(&format!("Boxed: {}", text))
+        .map_err(Into::into)
 }
 
 // ============================================================================
@@ -120,13 +127,15 @@ impl StringCollector {
     }
 
     /// Convert to a Ruby array.
-    fn to_ruby_array(&self) -> Result<NewValue<RArray>, Error> {
-        // SAFETY: Value is immediately returned to Ruby
-        let array = unsafe { RArray::new() };
+    fn to_ruby_array<'ctx>(
+        &self,
+        ctx: &'ctx Context,
+    ) -> Result<Pin<&'ctx StackPinned<RArray>>, Error> {
+        let array = ctx.new_array()?;
         for s in &self.strings {
-            // Get the RString from BoxValue and push it to the array
+            // Get the RString from BoxValue (via Deref) and push a clone to the array
             // RString implements IntoValue, so we can push it directly
-            array.push(s.get());
+            array.get().push((**s).clone());
         }
         Ok(array)
     }
@@ -161,52 +170,64 @@ fn get_collector() -> &'static mut StringCollector {
 // ============================================================================
 
 /// Global function: process a string with pinned argument
-fn ruby_process_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
-    process_pinned_string(s)
+fn ruby_process_string<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    process_pinned_string(ctx, s)
 }
 
 /// Global function: concatenate two strings
-fn ruby_concat_strings(
+fn ruby_concat_strings<'ctx>(
+    ctx: &'ctx Context,
     first: Pin<&StackPinned<RString>>,
     second: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
-    concatenate_pinned(first, second)
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    concatenate_pinned(ctx, first, second)
 }
 
 /// Global function: demonstrate boxing a value
-fn ruby_box_string(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
-    let boxed = create_boxed_string(s)?;
-    // Convert back from BoxValue to return
-    Ok(NewValue::new(boxed.get()))
+fn ruby_box_string<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    create_boxed_string(ctx, s)
 }
 
 /// Global function: add a string to the collector
-fn ruby_collect_string(s: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
+fn ruby_collect_string(
+    _ctx: &Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
     let collector = get_collector();
     collector.add(s);
     Ok(collector.len() as i64)
 }
 
 /// Global function: get the count of collected strings
-fn ruby_collector_count() -> Result<i64, Error> {
+fn ruby_collector_count(_ctx: &Context) -> Result<i64, Error> {
     Ok(get_collector().len() as i64)
 }
 
 /// Global function: join all collected strings
-fn ruby_collector_join(sep: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn ruby_collector_join<'ctx>(
+    ctx: &'ctx Context,
+    sep: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let sep_str = sep.get().to_string()?;
     let joined = get_collector().join(&sep_str)?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&joined) })
+    ctx.new_string(&joined).map_err(Into::into)
 }
 
 /// Global function: get collected strings as Ruby array
-fn ruby_collector_to_array() -> Result<NewValue<RArray>, Error> {
-    get_collector().to_ruby_array()
+fn ruby_collector_to_array<'ctx>(
+    ctx: &'ctx Context,
+) -> Result<Pin<&'ctx StackPinned<RArray>>, Error> {
+    get_collector().to_ruby_array(ctx)
 }
 
 /// Global function: clear the collector
-fn ruby_collector_clear() -> Result<i64, Error> {
+fn ruby_collector_clear(_ctx: &Context) -> Result<i64, Error> {
     let collector = get_collector();
     let count = collector.len();
     collector.strings.clear();
@@ -217,13 +238,15 @@ fn ruby_collector_clear() -> Result<i64, Error> {
 ///
 /// This function creates multiple values and shows that they all
 /// remain valid because they're properly pinned on the stack.
-fn ruby_demo_stack_pinning() -> Result<NewValue<RString>, Error> {
-    // Each value is pinned on the stack - GC can see all of them
-    pin_on_stack!(s1 = unsafe { RString::new("Stack") });
-    pin_on_stack!(s2 = unsafe { RString::new("pinning") });
-    pin_on_stack!(s3 = unsafe { RString::new("keeps") });
-    pin_on_stack!(s4 = unsafe { RString::new("values") });
-    pin_on_stack!(s5 = unsafe { RString::new("safe!") });
+fn ruby_demo_stack_pinning<'ctx>(
+    ctx: &'ctx Context,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    // Each value is pinned in the context - GC can see all of them
+    let s1 = ctx.new_string("Stack")?;
+    let s2 = ctx.new_string("pinning")?;
+    let s3 = ctx.new_string("keeps")?;
+    let s4 = ctx.new_string("values")?;
+    let s5 = ctx.new_string("safe!")?;
 
     // All five values are visible to the GC during this call
     // Even if GC runs, none of these will be collected
@@ -236,12 +259,13 @@ fn ruby_demo_stack_pinning() -> Result<NewValue<RString>, Error> {
         s5.get().to_string()?,
     );
 
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&result) })
+    ctx.new_string(&result).map_err(Into::into)
 }
 
 /// Global function: demonstrate heap boxing for collections
-fn ruby_demo_heap_boxing() -> Result<NewValue<RArray>, Error> {
+fn ruby_demo_heap_boxing<'ctx>(
+    ctx: &'ctx Context,
+) -> Result<Pin<&'ctx StackPinned<RArray>>, Error> {
     // Create several BoxValue instances - safe for heap storage
     let mut boxed_values: Vec<BoxValue<RString>> = Vec::new();
 
@@ -253,12 +277,11 @@ fn ruby_demo_heap_boxing() -> Result<NewValue<RArray>, Error> {
     boxed_values.push(RString::new_boxed("safely!"));
 
     // All values remain valid because BoxValue registers with GC
-    // SAFETY: Value is immediately returned to Ruby
-    let array = unsafe { RArray::new() };
+    let array = ctx.new_array()?;
     for boxed in &boxed_values {
-        // Get the RString from BoxValue and push it to the array
+        // Get the RString from BoxValue (via Deref) and push a clone to the array
         // RString implements IntoValue, so we can push it directly
-        array.push(boxed.get());
+        array.get().push((**boxed).clone());
     }
 
     // BoxValues are automatically unregistered when dropped

@@ -4,7 +4,7 @@ use std::ffi::CStr;
 
 use crate::convert::{IntoValue, TryConvert};
 use crate::error::Error;
-use crate::value::{BoxValue, ReprValue, Value};
+use crate::value::{BoxValue, NewValue, ReprValue, Value};
 
 /// Ruby String (heap allocated).
 ///
@@ -31,13 +31,39 @@ use crate::value::{BoxValue, ReprValue, Value};
 pub struct RString(Value);
 
 impl RString {
-    /// Internal: Create a new Ruby string from a Rust string slice.
+    /// Create a new Ruby string from a Rust string slice.
     ///
-    /// Users should use `Context::new_string()` or `RString::new_boxed()` instead.
-    #[doc(hidden)]
-    pub(crate) unsafe fn new_internal(s: &str) -> Self {
+    /// Returns a `NewValue<RString>` guard that must be either:
+    /// - Pinned on the stack with `pin_on_stack!`, OR
+    /// - Boxed for heap storage with `.into_box()`, OR
+    /// - Immediately returned to Ruby
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the returned guard is handled appropriately.
+    /// Failing to pin or box the value may result in it being collected by Ruby's GC.
+    ///
+    /// For safe alternatives, use:
+    /// - `RString::new_boxed()` for heap storage
+    /// - `Context::new_string()` for stack-pinned strings in methods
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RString;
+    /// use solidus::convert::IntoValue;
+    /// use solidus::pin_on_stack;
+    ///
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::new("hello") });
+    ///
+    /// // Or: SAFETY: Value is immediately returned to Ruby
+    /// let guard = unsafe { RString::new("hello") };
+    /// let raw = guard.into_value().as_raw();
+    /// ```
+    pub unsafe fn new(s: &str) -> NewValue<Self> {
         // SAFETY: Caller ensures the returned value is properly handled
-        unsafe { Self::from_slice_internal(s.as_bytes()) }
+        NewValue::new(unsafe { Self::from_slice_raw(s.as_bytes()) })
     }
 
     /// Create a new Ruby string, boxed for heap storage.
@@ -55,12 +81,43 @@ impl RString {
     /// ```
     pub fn new_boxed(s: &str) -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { BoxValue::new(Self::new_internal(s)) }
+        unsafe { BoxValue::new(Self::from_slice_raw(s.as_bytes())) }
     }
 
-    /// Internal: Create a new Ruby string from a byte slice.
+    /// Create a new Ruby string from a byte slice.
+    ///
+    /// Returns a `NewValue<RString>` guard that must be either:
+    /// - Pinned on the stack with `pin_on_stack!`, OR
+    /// - Boxed for heap storage with `.into_box()`, OR
+    /// - Immediately returned to Ruby
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the returned guard is handled appropriately.
+    /// Failing to pin or box the value may result in it being collected by Ruby's GC.
+    ///
+    /// For a safe alternative, use `RString::from_slice_boxed()`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RString;
+    /// use solidus::pin_on_stack;
+    ///
+    /// // SAFETY: Value is immediately pinned
+    /// pin_on_stack!(s = unsafe { RString::from_slice(b"hello\x00world") });
+    /// ```
+    pub unsafe fn from_slice(bytes: &[u8]) -> NewValue<Self> {
+        // SAFETY: Caller ensures the returned value is properly handled
+        NewValue::new(unsafe { Self::from_slice_raw(bytes) })
+    }
+
+    /// Internal: Create a new Ruby string from a byte slice without guard.
+    ///
+    /// This is unsafe and returns the raw RString for internal use only.
+    /// Users should use `from_slice()` or `from_slice_boxed()` instead.
     #[doc(hidden)]
-    pub(crate) unsafe fn from_slice_internal(bytes: &[u8]) -> Self {
+    unsafe fn from_slice_raw(bytes: &[u8]) -> Self {
         // SAFETY: rb_str_new creates a new Ruby string with the given bytes
         let val = unsafe {
             rb_sys::rb_str_new(
@@ -87,7 +144,7 @@ impl RString {
     /// ```
     pub fn from_slice_boxed(bytes: &[u8]) -> BoxValue<Self> {
         // SAFETY: We immediately box and register with GC
-        unsafe { BoxValue::new(Self::from_slice_internal(bytes)) }
+        unsafe { BoxValue::new(Self::from_slice_raw(bytes)) }
     }
 
     /// Get the length of the string in bytes.

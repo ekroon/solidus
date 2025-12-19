@@ -1088,12 +1088,12 @@ fn generate_method_wrapper_dynamic(
 
                 let result = #fn_name(#(#call_args),*);
 
-                use solidus::method::ReturnValue;
+                use solidus::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => solidus::Error::from_panic(panic).raise(),
             }
@@ -1195,12 +1195,12 @@ fn generate_function_wrapper_dynamic(
             let result = ::std::panic::catch_unwind(|| {
                 #body
 
-                use solidus::method::ReturnValue;
+                use solidus::method::IntoReturnValue;
                 result.into_return_value()
             });
 
             match result {
-                Ok(Ok(value)) => value.as_raw(),
+                Ok(Ok(value)) => value,
                 Ok(Err(error)) => error.raise(),
                 Err(panic) => solidus::Error::from_panic(panic).raise(),
             }

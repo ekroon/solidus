@@ -408,9 +408,8 @@ pub extern "C" fn group_by_length() -> rb_sys::VALUE {
             let group = match grouped.get(len) {
                 Some(existing) => RArray::try_convert(existing)?,
                 None => {
-                    // Use RArray::default() to get an RArray directly
-                    // (default() internally creates and unwraps a NewValue)
-                    let new_group = RArray::default();
+                    // SAFETY: Value is immediately inserted into the hash and used
+                    let new_group = unsafe { RArray::new() };
                     grouped.insert(len, new_group.clone());
                     new_group
                 }

@@ -39,6 +39,17 @@ pub trait IntoReturnValue {
 }
 
 // ============================================================================
+// NewValue - guarded values that can be returned directly
+// ============================================================================
+
+impl<T: ReprValue> IntoReturnValue for crate::value::NewValue<T> {
+    #[inline]
+    fn into_return_value(self) -> Result<rb_sys::VALUE, Error> {
+        Ok(self.as_raw())
+    }
+}
+
+// ============================================================================
 // Pinned values from Context
 // ============================================================================
 
@@ -176,6 +187,25 @@ impl IntoReturnValue for bool {
         } else {
             Ok(rb_sys::Qfalse as rb_sys::VALUE)
         }
+    }
+}
+
+// ============================================================================
+// Floating point types
+// ============================================================================
+
+impl IntoReturnValue for f64 {
+    #[inline]
+    fn into_return_value(self) -> Result<rb_sys::VALUE, Error> {
+        // SAFETY: rb_float_new is always safe to call
+        Ok(unsafe { rb_sys::rb_float_new(self) })
+    }
+}
+
+impl IntoReturnValue for f32 {
+    #[inline]
+    fn into_return_value(self) -> Result<rb_sys::VALUE, Error> {
+        (self as f64).into_return_value()
     }
 }
 

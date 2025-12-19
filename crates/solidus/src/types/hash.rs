@@ -31,6 +31,36 @@ use crate::value::{BoxValue, ReprValue, Value};
 pub struct RHash(Value);
 
 impl RHash {
+    /// Create a new empty Ruby hash.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the returned value is:
+    /// - Pinned on the stack with `pin_on_stack!`, OR
+    /// - Immediately boxed with `.into_box()`, OR
+    /// - Immediately returned to Ruby
+    ///
+    /// Failing to do so may result in the value being collected by Ruby's GC.
+    ///
+    /// For safe alternatives, use:
+    /// - `RHash::new_boxed()` for heap storage
+    /// - `Context::new_hash()` for stack-pinned hashes in methods
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RHash;
+    ///
+    /// // SAFETY: Value is immediately returned to Ruby
+    /// let hash = unsafe { RHash::new() };
+    /// ```
+    pub unsafe fn new() -> Self {
+        // SAFETY: rb_hash_new creates a new Ruby hash
+        let val = unsafe { rb_sys::rb_hash_new() };
+        // SAFETY: rb_hash_new returns a valid VALUE
+        RHash(unsafe { Value::from_raw(val) })
+    }
+
     /// Internal: Create a new empty Ruby hash.
     ///
     /// Users should use `Context::new_hash()` or `RHash::new_boxed()` instead.
@@ -237,7 +267,7 @@ impl RHash {
         // Create a temporary array to collect key-value pairs
         // This is safer than using rb_hash_foreach which requires complex FFI callbacks
         // SAFETY: We immediately use the array and don't let it escape
-        let pairs = unsafe { RArray::new_internal() };
+        let pairs = unsafe { RArray::new() };
 
         // Use rb_hash_foreach to collect all pairs
         unsafe extern "C" fn collect_pair(
@@ -315,6 +345,43 @@ impl RHash {
         })?;
 
         Ok(map)
+    }
+
+    /// Create a Ruby hash from a Rust HashMap.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the returned value is:
+    /// - Pinned on the stack with `pin_on_stack!`, OR
+    /// - Immediately boxed with `.into_box()`, OR
+    /// - Immediately returned to Ruby
+    ///
+    /// For a safe alternative, use `RHash::from_hash_map_boxed()`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use solidus::types::RHash;
+    /// use std::collections::HashMap;
+    ///
+    /// let mut map = HashMap::new();
+    /// map.insert("a", 1i64);
+    /// map.insert("b", 2i64);
+    ///
+    /// // SAFETY: Value is immediately returned to Ruby
+    /// let hash = unsafe { RHash::from_hash_map(map) };
+    /// ```
+    pub unsafe fn from_hash_map<K, V>(map: HashMap<K, V>) -> Self
+    where
+        K: IntoValue,
+        V: IntoValue,
+    {
+        // SAFETY: Caller ensures the returned value is properly handled
+        let hash = unsafe { Self::new() };
+        for (k, v) in map {
+            hash.insert(k, v);
+        }
+        hash
     }
 
     /// Internal: Create a Ruby hash from a Rust HashMap.

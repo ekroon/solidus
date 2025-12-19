@@ -68,7 +68,7 @@ impl<T: ReprValue> BoxValue<T> {
     /// Note: This returns a clone of the value.
     /// The BoxValue continues to protect the value from GC.
     ///
-    /// Prefer using deref (`*boxed` or `&*boxed`) to access the inner value
+    /// Prefer using deref (`&*boxed`) to access the inner value
     /// by reference instead of cloning.
     #[inline]
     pub fn inner(&self) -> T {

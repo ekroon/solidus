@@ -318,7 +318,7 @@ fn build_user_hash(name: &str, age: i64, active: bool) -> Result<NewValue<RHash>
     hash.insert("name", name);
     hash.insert("age", age);
     hash.insert("active", active);
-    Ok(hash)
+    Ok(NewValue::new(hash))
 }
 
 #[no_mangle]
