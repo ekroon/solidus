@@ -27,10 +27,14 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 }
 
 impl MyClass {
-    fn greet(&self, name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+    fn greet<'ctx>(
+        ctx: &'ctx Context,
+        _rb_self: &Self,
+        name: Pin<&StackPinned<RString>>,
+    ) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
         let name_str = name.get().to_string()?;
-        // SAFETY: Value is immediately returned to Ruby
-        Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
+        ctx.new_string(&format!("Hello, {}!", name_str))
+            .map_err(Into::into)
     }
 }
 ```
