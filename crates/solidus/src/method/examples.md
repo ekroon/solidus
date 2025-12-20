@@ -5,32 +5,39 @@ This document provides examples of using the `method!` and `function!` macros.
 ## method! - Instance Methods
 
 The `method!` macro is used to wrap Rust functions as Ruby instance methods.
-The first parameter is always `rb_self` (the receiver).
+The first parameter is always `ctx: &'ctx Context`, followed by `rb_self` (the receiver).
 
 ```rust
 use solidus::prelude::*;
 use std::pin::Pin;
 
-// Arity 0: just self
-fn length(rb_self: RString) -> Result<i64, Error> {
+// Arity 0: just self (no new values created, no Context needed)
+fn length(_ctx: &Context, rb_self: RString) -> Result<i64, Error> {
     Ok(rb_self.len() as i64)
 }
 
-// Arity 1: self + one argument
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+// Arity 1: self + one argument (creates new value, needs Context)
+fn concat<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+    other: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     // other is automatically pinned on the stack by the wrapper
+    let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    // ... concatenation logic
-    Ok(rb_self)
+    let result = format!("{}{}", self_str, other_str);
+    ctx.new_string(&result).map_err(Into::into)
 }
 
-// Arity 2: self + two arguments
+// Arity 2: self + two arguments (mutates existing value, no Context needed)
 fn insert(
+    _ctx: &Context,
     rb_self: RArray,
     index: Pin<&StackPinned<Integer>>,
     value: Pin<&StackPinned<Value>>,
 ) -> Result<RArray, Error> {
     // Both arguments are pinned
+    // In real implementation, would call rb_ary_store or similar
     Ok(rb_self)
 }
 
@@ -53,18 +60,23 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 // Arity 0: no arguments
-fn hello_world() -> Result<RString, Error> {
-    Ok(RString::new("Hello, World!"))
+fn hello_world<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello, World!").map_err(Into::into)
 }
 
 // Arity 1: one argument
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name_str = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name_str)))
+    ctx.new_string(&format!("Hello, {}!", name_str))
+        .map_err(Into::into)
 }
 
-// Arity 2: two arguments
+// Arity 2: two arguments (returns immediate value, Context unused)
 fn add(
+    _ctx: &Context,
     a: Pin<&StackPinned<Integer>>,
     b: Pin<&StackPinned<Integer>>,
 ) -> Result<Integer, Error> {
@@ -82,11 +94,22 @@ fn register_functions(ruby: &Ruby) -> Result<(), Error> {
 }
 ```
 
+## Context Parameter
+
+Both `method!` and `function!` require a `ctx: &'ctx Context` parameter as the first parameter:
+
+- For **instance methods**: `ctx` is first, followed by `rb_self`, then other arguments
+- For **module/global functions**: `ctx` is first, then other arguments
+
+The Context provides stack-allocated storage for creating new Ruby values. If your function:
+- **Creates new Ruby values**: Use `ctx.new_string()`, `ctx.new_array()`, etc. and return `Pin<&'ctx StackPinned<T>>`
+- **Only returns existing values or primitives**: You still receive `ctx` but may prefix it with `_ctx` if unused
+
 ## Key Differences
 
 | Aspect | method! | function! |
 |--------|---------|-----------|
-| First parameter | Always `rb_self` (receiver) | No `rb_self` |
+| First parameter | Always `ctx: &'ctx Context`, then `rb_self` (receiver) | Always `ctx: &'ctx Context` |
 | Use case | Instance methods | Module/global functions |
 | Ruby API | `rb_define_method` | `rb_define_global_function`, `rb_define_module_function` |
 
@@ -102,7 +125,7 @@ Both macros currently support arities 0-4:
 Both macros automatically catch panics and convert them to Ruby exceptions:
 
 ```rust
-fn might_panic(rb_self: Value) -> Result<Value, Error> {
+fn might_panic(_ctx: &Context, rb_self: Value) -> Result<Value, Error> {
     if some_condition {
         panic!("Something went wrong!");  // Caught and converted to Ruby exception
     }
@@ -115,7 +138,7 @@ fn might_panic(rb_self: Value) -> Result<Value, Error> {
 Both macros handle `Result<T, Error>` return types and propagate errors to Ruby:
 
 ```rust
-fn might_fail(rb_self: Value) -> Result<Value, Error> {
+fn might_fail(_ctx: &Context, rb_self: Value) -> Result<Value, Error> {
     Err(Error::runtime_error("Operation failed"))  // Raised as Ruby exception
 }
 ```
@@ -129,5 +152,5 @@ GC issues. The pinning is handled transparently by the wrapper:
 // The wrapper generates code like:
 // let arg_converted = RString::try_convert(arg_value)?;
 // pin_on_stack!(arg_pinned = arg_converted);
-// my_function(rb_self, arg_pinned);  // arg_pinned is Pin<&StackPinned<RString>>
+// my_function(ctx, rb_self, arg_pinned);  // arg_pinned is Pin<&StackPinned<RString>>
 ```

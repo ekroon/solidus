@@ -25,24 +25,31 @@ Solidus enforces that **all Ruby VALUEs are pinned from the moment of creation**
 This is achieved through:
 
 1. **VALUE types are `!Copy`**: Users cannot accidentally copy VALUEs to heap storage
-2. **Creation returns pinned types**: `RString::new()` etc. return types that must be pinned
+2. **Context-based creation**: `ctx.new_string()` etc. return `Pin<&'ctx StackPinned<T>>`
 3. **Explicit `BoxValue<T>` for heap storage**: GC-registered wrapper for heap allocation
 
 ```rust
-// Values must be pinned from creation
-fn example() -> Result<RString, Error> {
-    pin_on_stack!(s = RString::new("hello")?);
-    // s is Pin<&StackPinned<RString>> - cannot be stored in Vec
+// Values must be pinned from creation using Context
+fn example<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let s = ctx.new_string("hello")?;
+    // s is Pin<&'ctx StackPinned<RString>> - cannot be stored in Vec
     
     // To store on heap, explicit BoxValue required
-    let boxed = BoxValue::new(s);  // GC-registered, safe to store
+    let boxed = ctx.new_string_boxed("hello");  // GC-registered, safe to store
     
-    Ok(s.into_value())  // Return pinned value to Ruby
+    Ok(s)  // Return pinned value to Ruby
 }
 
 // Method arguments are also pinned
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<RString, Error> {
+fn concat<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+    other: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     // `other` cannot be moved to heap - enforced by type system
+    let s1 = rb_self.to_string()?;
+    let s2 = other.get().to_string()?;
+    ctx.new_string(&format!("{}{}", s1, s2))
 }
 ```
 
@@ -71,8 +78,8 @@ This is a **breaking change** from the current implementation that requires:
 1. **Remove `Copy` from VALUE types**: `RString`, `RArray`, `RHash`, `Value`, etc.
    must not implement `Copy`.
 
-2. **Redesign creation APIs**: Functions like `RString::new()` must return a type
-   that enforces immediate pinning (e.g., a guard type consumed by `pin_on_stack!`).
+2. **Redesign creation APIs**: Functions must use `Context` for value creation, returning
+   `Pin<&'ctx StackPinned<T>>` types that are stack-allocated and GC-visible.
 
 3. **Return value handling**: The method wrapper macros must ensure return values
    are pinned on the wrapper's stack until returned to Ruby.

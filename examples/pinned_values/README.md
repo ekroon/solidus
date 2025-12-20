@@ -28,20 +28,21 @@ Solidus provides two mechanisms to keep values safe:
 
 ### 1. Stack Pinning (`Pin<&StackPinned<T>>`)
 
-For most cases, pin values on the stack where GC can see them:
+For most cases, values are automatically pinned by the Context:
 
 ```rust
 use solidus::prelude::*;
 
-// Create a value - returns NewValue
-let guard = RString::new("hello");
-
-// Pin it on the stack
-pin_on_stack!(s = guard);
-// s is now Pin<&StackPinned<RString>>
-
-// Access the value
-let content = s.get().to_string()?;
+// Context provides stack-allocated storage for Ruby values
+fn example<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    // Create and return a pinned value
+    let s = ctx.new_string("hello")?;
+    // s is already Pin<&'ctx StackPinned<RString>>
+    
+    // Access the value
+    let content = s.get().to_string()?;
+    Ok(s)
+}
 ```
 
 ### 2. Heap Boxing (`BoxValue<T>`)
@@ -51,13 +52,15 @@ When you need heap storage, use `BoxValue` which registers with Ruby's GC:
 ```rust
 use solidus::prelude::*;
 
-// Create and box a value
-let guard = RString::new("hello");
-let boxed = guard.into_box();
-
-// Safe to store in collections!
-let mut strings: Vec<BoxValue<RString>> = Vec::new();
-strings.push(boxed);
+fn example<'ctx>(ctx: &'ctx Context) -> Result<Vec<BoxValue<RString>>, Error> {
+    // Create and box a value using Context
+    let boxed = ctx.new_string_boxed("hello")?;
+    
+    // Safe to store in collections!
+    let mut strings: Vec<BoxValue<RString>> = Vec::new();
+    strings.push(boxed);
+    Ok(strings)
+}
 ```
 
 ## What This Example Demonstrates
@@ -65,37 +68,41 @@ strings.push(boxed);
 ### Functions with Pinned Arguments
 
 ```rust
-fn process_pinned_string(
+fn process_pinned_string<'ctx>(
+    ctx: &'ctx Context,
     input: Pin<&StackPinned<RString>>
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let content = input.get().to_string()?;
-    Ok(RString::new(&content.to_uppercase()))
+    ctx.new_string(&content.to_uppercase()).map_err(Into::into)
 }
 ```
 
 ### Multiple Pinned Arguments
 
 ```rust
-fn concatenate_pinned(
+fn concatenate_pinned<'ctx>(
+    ctx: &'ctx Context,
     first: Pin<&StackPinned<RString>>,
     second: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let s1 = first.get().to_string()?;
     let s2 = second.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", s1, s2)))
+    ctx.new_string(&format!("{}{}", s1, s2)).map_err(Into::into)
 }
 ```
 
 ### Instance Methods with Pinned Args
 
 ```rust
-fn append_to_self(
+fn append_to_self<'ctx>(
+    ctx: &'ctx Context,
     rb_self: RString,
     suffix: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let self_str = rb_self.to_string()?;
     let suffix_str = suffix.get().to_string()?;
-    Ok(RString::new(&format!("{}{}", self_str, suffix_str)))
+    ctx.new_string(&format!("{}{}", self_str, suffix_str))
+        .map_err(Into::into)
 }
 ```
 
@@ -107,9 +114,10 @@ struct StringCollector {
 }
 
 impl StringCollector {
-    fn add(&mut self, s: Pin<&StackPinned<RString>>) {
-        let boxed = BoxValue::new(s.get().clone());
+    fn add<'ctx>(&mut self, ctx: &'ctx Context, text: &str) -> Result<(), Error> {
+        let boxed = ctx.new_string_boxed(text)?;
         self.strings.push(boxed);
+        Ok(())
     }
 }
 ```
@@ -138,16 +146,16 @@ ruby test.rb
 
 | Mechanism | Purpose | Performance | When to Use |
 |-----------|---------|-------------|-------------|
-| `pin_on_stack!` | Stack storage | Fast (no allocation) | Local processing, arguments |
+| `Context` methods | Stack storage | Fast (no allocation) | Creating return values, local values |
 | `BoxValue<T>` | Heap storage | Slower (GC registration) | Collections, caching |
-| `NewValue<T>` | Creation guard | Zero-cost | Returned from constructors |
+| `Pin<&StackPinned<T>>` | Pinned reference | Zero-cost | Method arguments, parameters |
 
 ## Compile-Time Safety
 
 Solidus enforces these rules at compile time:
 
 1. **`!Copy` types** - Ruby values can't be accidentally copied to heap
-2. **`NewValue` must-use** - Compiler warns if you don't pin or box
+2. **Context lifetime** - Return values are tied to the Context lifetime
 3. **`!Unpin` wrappers** - Pinned values can't escape their lifetime
 
 If your code compiles, it's safe from GC-related undefined behavior.

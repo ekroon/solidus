@@ -26,8 +26,8 @@ ruby examples/hello_world/test.rb
 use solidus::prelude::*;
 
 #[solidus_macros::function]
-fn hello() -> Result<NewValue<RString>, Error> {
-    Ok(RString::new("Hello from Solidus!"))
+fn hello<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello from Solidus!").map_err(Into::into)
 }
 
 #[solidus_macros::init]

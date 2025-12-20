@@ -67,10 +67,16 @@ Use `wrap()` to create a Ruby object containing your Rust value:
 ```rust
 use solidus::prelude::*;
 use solidus::typed_data::wrap;
+use std::pin::Pin;
 
-fn create_point(ruby: &Ruby, class: &RClass, x: f64, y: f64) -> Result<Value, Error> {
+fn create_point<'ctx>(
+    ctx: &'ctx Context,
+    class: &RClass,
+    x: f64,
+    y: f64
+) -> Result<Pin<&'ctx StackPinned<Value>>, Error> {
     let point = Point::new(x, y);
-    wrap(ruby, class, point)
+    wrap(ctx, class, point)
 }
 ```
 
@@ -167,7 +173,7 @@ impl Container {
         self.items.len()
     }
 
-    fn get(&self, index: usize) -> Option<&BoxValue<Value>> {
+    fn inner(&self, index: usize) -> Option<&BoxValue<Value>> {
         self.items.get(index)
     }
 }
@@ -253,12 +259,15 @@ static POINT_CLASS: OnceLock<RClass> = OnceLock::new();
 
 // Constructor function
 #[solidus::function]
-fn point_new(x: f64, y: f64) -> Result<Value, Error> {
-    let ruby = unsafe { Ruby::get() };
+fn point_new<'ctx>(
+    ctx: &'ctx Context,
+    x: f64,
+    y: f64
+) -> Result<Pin<&'ctx StackPinned<Value>>, Error> {
     let class = POINT_CLASS
         .get()
         .ok_or_else(|| Error::runtime("Point class not initialized"))?;
-    wrap(ruby, class, Point { x, y })
+    wrap(ctx, class, Point { x, y })
 }
 
 // Instance methods
