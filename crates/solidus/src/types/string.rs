@@ -501,7 +501,7 @@ mod tests {
     #[ruby_test]
     fn test_rstring_try_convert() {
         let s = RString::new_boxed("test");
-        let val = s.into_value();
+        let val = s.as_value();
         let s = RString::try_convert(val).unwrap();
         assert_eq!(s.to_string().unwrap(), "test");
     }

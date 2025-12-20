@@ -40,6 +40,12 @@ impl solidus::convert::IntoValue for TestValue {
     }
 }
 
+impl solidus::method::IntoReturnValue for TestValue {
+    fn into_return_value(self) -> Result<rb_sys::VALUE, Error> {
+        Ok(self.0 as rb_sys::VALUE)
+    }
+}
+
 // ============================================================================
 // Method Tests (arity 0-2)
 // ============================================================================
@@ -265,6 +271,7 @@ fn test_usage_pattern_documentation() {
 fn test_comparison_with_declarative_macros() {
     // Using declarative macro (existing approach):
     fn existing_method(
+        _ctx: &solidus::Context,
         _rb_self: TestValue,
         _arg: Pin<&StackPinned<TestValue>>,
     ) -> Result<i64, Error> {

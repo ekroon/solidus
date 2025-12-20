@@ -401,15 +401,19 @@ mod ruby_tests {
     use std::pin::Pin;
 
     // Test functions for define_global_function
-    fn test_global_func_arity_0() -> Result<i64, Error> {
+    fn test_global_func_arity_0(_ctx: &crate::Context) -> Result<i64, Error> {
         Ok(42)
     }
 
-    fn test_global_func_arity_1(_arg: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
+    fn test_global_func_arity_1(
+        _ctx: &crate::Context,
+        _arg: Pin<&StackPinned<RString>>,
+    ) -> Result<i64, Error> {
         Ok(100)
     }
 
     fn test_global_func_arity_2(
+        _ctx: &crate::Context,
         _arg0: Pin<&StackPinned<RString>>,
         _arg1: Pin<&StackPinned<RString>>,
     ) -> Result<i64, Error> {

@@ -627,7 +627,7 @@ mod tests {
         let hash = RHash::new_boxed();
         hash.insert("key", 42i64);
 
-        let val = hash.into_value();
+        let val = hash.as_value();
         let converted = RHash::try_convert(val).unwrap();
         assert_eq!(converted.len(), 1);
     }

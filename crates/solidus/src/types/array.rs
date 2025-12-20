@@ -646,7 +646,7 @@ mod tests {
         let arr = RArray::new_boxed();
         arr.push(1i64);
 
-        let val = arr.into_value();
+        let val = arr.as_value();
         let converted = RArray::try_convert(val).unwrap();
         assert_eq!(converted.len(), 1);
     }

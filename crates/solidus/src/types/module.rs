@@ -525,12 +525,13 @@ mod tests {
     use std::pin::Pin;
 
     // Test method for define_method
-    fn test_method_arity_0(rb_self: RString) -> Result<i64, Error> {
+    fn test_method_arity_0(_ctx: &crate::Context, rb_self: RString) -> Result<i64, Error> {
         let _ = rb_self;
         Ok(42)
     }
 
     fn test_method_arity_1(
+        _ctx: &crate::Context,
         rb_self: RString,
         _arg: Pin<&crate::value::StackPinned<RString>>,
     ) -> Result<i64, Error> {
@@ -539,11 +540,14 @@ mod tests {
     }
 
     // Test function for define_singleton_method and define_global_function
-    fn test_function_arity_0() -> Result<i64, Error> {
+    fn test_function_arity_0(_ctx: &crate::Context) -> Result<i64, Error> {
         Ok(999)
     }
 
-    fn test_function_arity_1(_arg: Pin<&crate::value::StackPinned<RString>>) -> Result<i64, Error> {
+    fn test_function_arity_1(
+        _ctx: &crate::Context,
+        _arg: Pin<&crate::value::StackPinned<RString>>,
+    ) -> Result<i64, Error> {
         Ok(777)
     }
 

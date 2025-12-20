@@ -371,26 +371,26 @@ mod tests {
     // RFloat tests
     #[ruby_test]
     fn test_rfloat_creation() {
-        let num = RFloat::from_f64(3.14159265358979);
+        let num = unsafe { RFloat::from_f64(3.14159265358979) };
         assert!((num.to_f64() - 3.14159265358979).abs() < 0.0000001);
     }
 
     #[ruby_test]
     fn test_rfloat_zero() {
-        let num = RFloat::from_f64(0.0);
+        let num = unsafe { RFloat::from_f64(0.0) };
         assert_eq!(num.to_f64(), 0.0);
     }
 
     #[ruby_test]
     fn test_rfloat_negative() {
-        let num = RFloat::from_f64(-123.456);
+        let num = unsafe { RFloat::from_f64(-123.456) };
         assert!((num.to_f64() + 123.456).abs() < 0.001);
     }
 
     #[ruby_test]
     fn test_rfloat_large() {
         let large = 1.7976931348623157e308; // Near f64::MAX
-        let num = RFloat::from_f64(large);
+        let num = unsafe { RFloat::from_f64(large) };
         assert!((num.to_f64() - large).abs() / large < 0.0001);
     }
 
