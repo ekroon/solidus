@@ -45,7 +45,7 @@ method!(function_name, arity)
 ```rust
 use solidus::prelude::*;
 
-fn length(rb_self: RString) -> Result<i64, Error> {
+fn length(_ctx: &Context, rb_self: RString) -> Result<i64, Error> {
     Ok(rb_self.len() as i64)
 }
 
@@ -61,11 +61,15 @@ rclass.define_method("length", method!(length, 0), 0)?;
 use solidus::prelude::*;
 use std::pin::Pin;
 
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn concat<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+    other: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
+    ctx.new_string(&format!("{}{}", self_str, other_str))
+        .map_err(Into::into)
 }
 
 // Register the method
@@ -108,9 +112,8 @@ function!(function_name, arity)
 ```rust
 use solidus::prelude::*;
 
-fn greet() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello, World!") })
+fn greet<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello, World!").map_err(Into::into)
 }
 
 // Register as a global function
@@ -123,71 +126,12 @@ ruby.define_global_function("greet", function!(greet, 0), 0)?;
 use solidus::prelude::*;
 use std::pin::Pin;
 
-fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn to_upper<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let input = s.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&input.to_uppercase()) })
-}
-
-// Register as a module function
-rmodule.define_module_function("to_upper", function!(to_upper, 1), 1)?;
-```
-
-### Example: Arity 2 (self + two arguments)
-
-```rust
-fn multiply_three(
-    rb_self: RString,
-    arg1: Pin<&StackPinned<RString>>,
-    arg2: Pin<&StackPinned<RString>>,
-) -> Result<i64, Error> {
-    let a = rb_self.to_string()?.parse::<i64>()
-        .map_err(|_| Error::argument("first argument must be a number"))?;
-    let b = arg1.get().to_string()?.parse::<i64>()
-        .map_err(|_| Error::argument("second argument must be a number"))?;
-    let c = arg2.get().to_string()?.parse::<i64>()
-        .map_err(|_| Error::argument("third argument must be a number"))?;
-    Ok(a * b * c)
-}
-
-rclass.define_method("multiply_three", method!(multiply_three, 2), 2)?;
-```
-
-## The `function!` Macro
-
-The `function!` macro wraps a Rust function as a Ruby function (no `self` parameter).
-Use this for global functions, module functions, and class methods (singleton methods).
-
-### Basic Syntax
-
-```rust
-function!(function_name, arity)
-```
-
-### Example: Arity 0 (no arguments)
-
-```rust
-use solidus::prelude::*;
-
-fn greet() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello, World!") })
-}
-
-// Register as a global function
-ruby.define_global_function("greet", function!(greet, 0), 0)?;
-```
-
-### Example: Arity 1
-
-```rust
-use solidus::prelude::*;
-use std::pin::Pin;
-
-fn to_upper(s: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
-    let input = s.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&input.to_uppercase()) })
+    ctx.new_string(&input.to_uppercase()).map_err(Into::into)
 }
 
 // Register as a module function
@@ -198,8 +142,9 @@ rmodule.define_module_function("to_upper", function!(to_upper, 1), 1)?;
 
 ```rust
 fn add_numbers(
+    _ctx: &Context,
     a: Pin<&StackPinned<RString>>,
-    b: Pin<&StackPinned<RString>>
+    b: Pin<&StackPinned<RString>>,
 ) -> Result<i64, Error> {
     let num_a = a.get().to_string()?.parse::<i64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
@@ -223,11 +168,15 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 #[solidus::method]
-fn concat(rb_self: RString, other: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn concat<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+    other: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
+    ctx.new_string(&format!("{}{}", self_str, other_str))
+        .map_err(Into::into)
 }
 
 // Register using the generated module
@@ -245,10 +194,13 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 #[solidus::function]
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name_str = name.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
+    ctx.new_string(&format!("Hello, {}!", name_str))
+        .map_err(Into::into)
 }
 
 // Register using the generated module
@@ -305,11 +257,13 @@ the GC.
 For Ruby VALUE types (RString, RArray, RHash, etc.), use `Pin<&StackPinned<T>>`:
 
 ```rust
-fn example(arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn example<'ctx>(
+    ctx: &'ctx Context,
+    arg: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     // Access the inner value with .get()
     let s = arg.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Got: {}", s)) })
+    ctx.new_string(&format!("Got: {}", s)).map_err(Into::into)
 }
 ```
 
@@ -319,7 +273,7 @@ For instance methods, `self` is passed directly as the Ruby type since Ruby
 guarantees the receiver is live during the method call:
 
 ```rust
-fn my_method(rb_self: RString) -> Result<i64, Error> {
+fn my_method(_ctx: &Context, rb_self: RString) -> Result<i64, Error> {
     // rb_self is safe to use directly
     Ok(rb_self.len() as i64)
 }
@@ -332,10 +286,14 @@ automatically converts Ruby VALUES to these types via `TryConvert`:
 
 ```rust
 #[solidus::method]
-fn repeat(rb_self: RString, count: i64) -> Result<NewValue<RString>, Error> {
+fn repeat<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+    count: i64,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let s = rb_self.to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&s.repeat(count as usize)) })
+    ctx.new_string(&s.repeat(count as usize))
+        .map_err(Into::into)
 }
 ```
 
@@ -373,23 +331,22 @@ Methods must return `Result<T, Error>` where `T` implements `IntoValue`:
 
 ```rust
 // Return a Ruby string
-fn example() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("hello") })
+fn example<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("hello").map_err(Into::into)
 }
 
 // Return a Rust integer (converts to Ruby Fixnum/Bignum)
-fn example() -> Result<i64, Error> {
+fn example(_ctx: &Context) -> Result<i64, Error> {
     Ok(42)
 }
 
 // Return a boolean
-fn example() -> Result<bool, Error> {
+fn example(_ctx: &Context) -> Result<bool, Error> {
     Ok(true)
 }
 
 // Return nil (unit type)
-fn example() -> Result<(), Error> {
+fn example(_ctx: &Context) -> Result<(), Error> {
     Ok(())
 }
 ```
@@ -399,7 +356,7 @@ fn example() -> Result<(), Error> {
 Return an `Error` to raise a Ruby exception:
 
 ```rust
-fn validate(rb_self: RString) -> Result<bool, Error> {
+fn validate(_ctx: &Context, rb_self: RString) -> Result<bool, Error> {
     let s = rb_self.to_string()?;
     
     if s.is_empty() {
@@ -428,7 +385,7 @@ fn validate(rb_self: RString) -> Result<bool, Error> {
 Panics are caught and converted to Ruby RuntimeError exceptions:
 
 ```rust
-fn might_panic() -> Result<i64, Error> {
+fn might_panic(_ctx: &Context) -> Result<i64, Error> {
     panic!("Something went wrong!"); // Becomes Ruby RuntimeError
 }
 ```
@@ -540,22 +497,23 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 // Instance method
-fn greet(rb_self: RString) -> Result<NewValue<RString>, Error> {
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name = rb_self.to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Hello, {}!", name)) })
+    ctx.new_string(&format!("Hello, {}!", name))
+        .map_err(Into::into)
 }
 
 // Class method
-fn create_default() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("default") })
+fn create_default<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("default").map_err(Into::into)
 }
 
 // Global function
-fn hello() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello from Solidus!") })
+fn hello<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello from Solidus!").map_err(Into::into)
 }
 
 #[solidus::init]

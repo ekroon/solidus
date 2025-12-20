@@ -62,11 +62,11 @@ Replace the contents of `src/lib.rs` with:
 
 ```rust
 use solidus::prelude::*;
+use std::pin::Pin;
 
 /// A simple function that returns a greeting.
-fn hello() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello from Solidus!") })
+fn hello<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello from Solidus!").map_err(Into::into)
 }
 
 /// Initialize the extension and register our function.
@@ -137,14 +137,21 @@ use std::pin::Pin;
 
 /// Greets a person by name.
 /// Arguments use Pin<&StackPinned<T>> for GC safety.
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name_str = name.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
+    ctx.new_string(&format!("Hello, {}!", name_str))
+        .map_err(Into::into)
 }
 
 /// Adds two numbers (passed as strings).
-fn add(a: Pin<&StackPinned<RString>>, b: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
+fn add(
+    _ctx: &Context,
+    a: Pin<&StackPinned<RString>>,
+    b: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
     let num_a = a.get().to_string()?.parse::<i64>()
         .map_err(|_| Error::argument("first argument must be a number"))?;
     let num_b = b.get().to_string()?.parse::<i64>()
@@ -166,7 +173,8 @@ Key points:
 - `Pin<&StackPinned<RString>>` is the signature for Ruby VALUE arguments
 - Use `.get()` to access the inner value from a pinned reference
 - The `function!` macro handles all the pinning automatically
-- Return types can be Ruby values (`NewValue<T>`) or Rust primitives (`i64`)
+- Return types can be pinned Ruby values (`Pin<&'ctx StackPinned<T>>`) or Rust primitives (`i64`)
+- All functions that return Ruby values must include `ctx: &'ctx Context` parameter
 
 ## Defining Classes and Methods
 
@@ -178,27 +186,27 @@ use std::pin::Pin;
 
 /// Instance method: returns the string's length.
 /// The `rb_self` parameter is the Ruby receiver (self).
-fn string_length(rb_self: RString) -> Result<i64, Error> {
+fn string_length(_ctx: &Context, rb_self: RString) -> Result<i64, Error> {
     let s = rb_self.to_string()?;
     Ok(s.len() as i64)
 }
 
 /// Instance method: concatenates another string.
 /// Arguments use Pin<&StackPinned<T>> for GC safety.
-fn string_concat(
+fn string_concat<'ctx>(
+    ctx: &'ctx Context,
     rb_self: RString,
     other: Pin<&StackPinned<RString>>,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
+    ctx.new_string(&format!("{}{}", self_str, other_str))
+        .map_err(Into::into)
 }
 
 /// Class method: creates a greeting.
-fn create_greeting() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello!") })
+fn create_greeting<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("Hello!").map_err(Into::into)
 }
 
 #[solidus::init]
@@ -259,10 +267,13 @@ use solidus::prelude::*;
 use std::pin::Pin;
 
 #[solidus_macros::function]
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name_str = name.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Hello, {}!", name_str)) })
+    ctx.new_string(&format!("Hello, {}!", name_str))
+        .map_err(Into::into)
 }
 
 #[solidus::init]
@@ -283,13 +294,16 @@ Solidus propagates errors as Ruby exceptions:
 
 ```rust
 use solidus::prelude::*;
+use std::pin::Pin;
 
-fn might_fail(should_fail: bool) -> Result<NewValue<RString>, Error> {
+fn might_fail<'ctx>(
+    ctx: &'ctx Context,
+    should_fail: bool,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     if should_fail {
         Err(Error::runtime("Something went wrong!"))
     } else {
-        // SAFETY: Value is immediately returned to Ruby
-        Ok(unsafe { RString::new("Success!") })
+        ctx.new_string("Success!").map_err(Into::into)
     }
 }
 ```

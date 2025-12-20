@@ -183,11 +183,11 @@ let inner: &RString = &*boxed;
 
 ### Getting a Clone
 
-Use `.get()` to get a clone of the inner value:
+Use `.inner()` to get a clone of the inner value:
 
 ```rust
 let boxed = RString::new_boxed("hello");
-let cloned: RString = boxed.get();  // Returns a clone
+let cloned: RString = boxed.inner();  // Returns a clone
 ```
 
 ### Consuming the BoxValue
@@ -208,7 +208,8 @@ from GC. You should immediately pin it on the stack or wrap it in another `BoxVa
 
 | Scenario | Use |
 |----------|-----|
-| Temporary value in a function | `pin_on_stack!` |
+| Temporary value in a method | `Context::new_string()`, etc. |
+| Temporary value outside methods | `pin_on_stack!` |
 | Passing value to another function | `Pin<&StackPinned<T>>` |
 | Storing in a collection | `_boxed` variants or `BoxValue<T>` |
 | Field in a TypedData struct | `BoxValue<T>` |
@@ -217,16 +218,31 @@ from GC. You should immediately pin it on the stack or wrap it in another `BoxVa
 
 ### Stack Pinning (Common Case)
 
-Most Ruby values should be stack-pinned. This is the default and most efficient approach:
+Most Ruby values should be stack-pinned using Context within methods. This is the default and most efficient approach:
+
+```rust
+use solidus::{Context, RString, Error};
+use std::pin::Pin;
+use solidus::value::StackPinned;
+
+fn process_string<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    // Context handles stack pinning automatically
+    let s = ctx.new_string("hello")?;
+    // Use s within this function
+    // When the function returns, s is automatically cleaned up
+    Ok(s)
+}
+```
+
+For code outside of methods, use `pin_on_stack!`:
 
 ```rust
 use solidus::{RString, pin_on_stack};
 
-fn process_string() {
+fn standalone_function() {
     // pin_on_stack! handles the unsafe constructor internally
     pin_on_stack!(s = RString::new("hello"));
     // Use s within this function
-    // When the function returns, s is automatically cleaned up
 }
 ```
 
@@ -259,23 +275,30 @@ impl MyProcessor {
 3. **GC unregistration**: `rb_gc_unregister_address()` is called on drop
 
 For most applications, this overhead is negligible. However, in hot paths with many 
-short-lived values, prefer stack pinning:
+short-lived values, prefer stack pinning via Context (in methods) or `pin_on_stack!` (elsewhere):
 
 ```rust
-use solidus::{RString, pin_on_stack};
+use solidus::{Context, RString, Error};
+use std::pin::Pin;
+use solidus::value::StackPinned;
 
-// Good: Stack pinning in a loop
-for i in 0..1000 {
-    pin_on_stack!(s = RString::new(&format!("item_{}", i)));
-    process(&s);
-    // s is cleaned up at each iteration, no heap allocation
+// Good: Stack pinning via Context in a method
+fn process_items<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    for i in 0..1000 {
+        let s = ctx.new_string(&format!("item_{}", i))?;
+        process_string(s)?;
+        // s is visible to GC, no extra heap allocation
+    }
+    ctx.new_string("done").map_err(Into::into)
 }
 
 // Avoid: Boxing in a hot loop when not needed
-for i in 0..1000 {
-    let boxed = RString::new_boxed(&format!("item_{}", i));
-    process_boxed(&boxed);
-    // Extra heap allocation and GC registration per iteration
+fn avoid_this() {
+    for i in 0..1000 {
+        let boxed = RString::new_boxed(&format!("item_{}", i));
+        process_boxed(&boxed);
+        // Extra heap allocation and GC registration per iteration
+    }
 }
 ```
 
@@ -291,7 +314,7 @@ for i in 0..1000 {
 - **Problem**: Ruby's GC only scans the stack; heap-stored VALUES can be collected
 - **Solution**: `BoxValue<T>` registers VALUES with Ruby's GC
 - **Creation**: Use safe `_boxed` variants like `RString::new_boxed()` (preferred)
-- **Access**: Use `Deref`/`DerefMut` or `.get()`/`.into_inner()`
+- **Access**: Use `Deref`/`DerefMut` or `.inner()`/`.into_inner()`
 - **Collections**: `Vec<BoxValue<T>>`, `HashMap<K, BoxValue<T>>`, etc.
 - **Performance**: Prefer stack pinning; use `BoxValue` only when needed
 

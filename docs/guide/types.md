@@ -50,15 +50,13 @@ They must be either stack-pinned or explicitly boxed to prevent GC issues.
 | Class | Ruby class objects | `RClass` |
 | Module | Ruby module objects | `RModule` |
 
-Heap types require `unsafe` for direct construction, but `pin_on_stack!` provides
-a safe path that handles the unsafe code internally:
+Heap types require Context for construction, which provides safe pinned values:
 
 ```rust
 use solidus::types::RString;
-use solidus::pin_on_stack;
 
-// PREFERRED: pin_on_stack! handles unsafe internally
-pin_on_stack!(s = RString::new("hello"));
+// Create using Context (returns Pin<&StackPinned<RString>>)
+let s = ctx.new_string("hello")?;
 println!("Length: {}", s.get().len());
 
 // For heap storage, use the safe _boxed variants
@@ -168,11 +166,10 @@ let value = f.to_f64();
 Ruby strings are mutable byte sequences with encoding support:
 
 ```rust
-use solidus::types::{RString, Encoding};
-use solidus::pin_on_stack;
+use solidus::types::RString;
 
-// PREFERRED: Create using pin_on_stack! (handles unsafe internally)
-pin_on_stack!(s = RString::new("Hello, world!"));
+// Create using Context (returns Pin<&StackPinned<RString>>)
+let s = ctx.new_string("Hello, world!")?;
 
 // Basic operations
 let len = s.get().len();           // 13 (bytes)
@@ -190,7 +187,7 @@ Creating strings from binary data:
 ```rust
 // Binary data with null bytes
 let bytes = b"binary\x00data";
-pin_on_stack!(s = RString::from_slice(bytes));
+let s = ctx.new_string_from_slice(bytes)?;
 
 // Length includes null byte
 assert_eq!(s.get().len(), 11);
@@ -226,14 +223,13 @@ Ruby arrays are dynamic, heterogeneous collections:
 
 ```rust
 use solidus::types::RArray;
-use solidus::pin_on_stack;
 use solidus::convert::TryConvert;
 
-// PREFERRED: Create using pin_on_stack! (handles unsafe internally)
-pin_on_stack!(arr = RArray::new());
+// Create empty array
+let arr = ctx.new_array()?;
 
 // Create with capacity (performance optimization)
-pin_on_stack!(arr = RArray::with_capacity(100));
+let arr = ctx.new_array_with_capacity(100)?;
 
 // Push elements
 arr.get().push(42i64);
@@ -271,7 +267,7 @@ Converting to/from Rust collections:
 
 ```rust
 // From slice
-pin_on_stack!(arr = RArray::from_slice(&[1i64, 2, 3, 4, 5]));
+let arr = ctx.new_array_from_slice(&[1i64, 2, 3, 4, 5])?;
 
 // To Vec (with type conversion)
 let vec: Vec<i64> = arr.get().to_vec()?;
@@ -287,11 +283,10 @@ Ruby hashes are key-value stores supporting any Ruby type as keys:
 
 ```rust
 use solidus::types::{RHash, Symbol};
-use solidus::pin_on_stack;
 use solidus::convert::TryConvert;
 
-// PREFERRED: Create using pin_on_stack! (handles unsafe internally)
-pin_on_stack!(hash = RHash::new());
+// Create empty hash
+let hash = ctx.new_hash()?;
 
 // Insert with string keys
 hash.get().insert("name", "Alice");
@@ -340,7 +335,7 @@ use std::collections::HashMap;
 let mut map = HashMap::new();
 map.insert("red", 255i64);
 map.insert("green", 128i64);
-pin_on_stack!(hash = RHash::from_hash_map(map));
+let hash = ctx.new_hash_from_map(map)?;
 
 // To HashMap
 let rust_map: HashMap<String, i64> = hash.get().to_hash_map()?;
@@ -418,9 +413,9 @@ let str_val = "hello".into_value();
 let vec_val = vec![1i64, 2, 3].into_value();
 let map_val = HashMap::from([("a", 1)]).into_value();
 
-// Ruby types - use unsafe or pin_on_stack!
-pin_on_stack!(rstr = RString::new("hello"));
-let val = rstr.get().as_value();
+// Ruby types - use Context for safe creation
+let s = ctx.new_string("hello")?;
+let val = s.get().as_value();
 ```
 
 ### Supported Conversions
@@ -513,21 +508,20 @@ let len = s.len();
 let len = rstring.len();
 ```
 
-### 4. Pin Heap Values Correctly
+### 4. Create Heap Values with Context
 
 ```rust
-// Good: Pin for local use (preferred - no unsafe needed)
-pin_on_stack!(s = RString::new("hello"));
+// Good: Use Context to create pinned values (no unsafe needed)
+let s = ctx.new_string("hello")?;
 let len = s.get().len();
 
 // Good: Use _boxed variants for heap storage
 let boxed = RString::new_boxed("hello");
 let mut vec = vec![boxed];
 
-// For method returns, use unsafe with safety comment
-fn greet() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("hello") })
+// For method returns, Context creates pinned values on its stack
+fn greet<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("hello")
 }
 ```
 

@@ -26,9 +26,9 @@ or explicitly boxed for the heap from the moment they're created, enforced at co
 
 - **Build**: `cargo build`
 - **Build all**: `cargo build --workspace`
-- **Test Rust**: `cargo test --workspace` (28 tests, no Ruby required)
+- **Test Rust**: `cargo test --workspace` (no Ruby required)
 - **Test with Ruby (CI)**: `cargo test --workspace --features embed` (requires static Ruby)
-- **Test with Ruby (local)**: `cargo test --workspace --features link-ruby` (39 tests, requires dynamic Ruby)
+- **Test with Ruby (local)**: `cargo test --workspace --features link-ruby` (requires dynamic Ruby)
 - **Run single test**: `cargo test -p solidus test_name`
 - **Lint**: `cargo fmt --check && cargo clippy --workspace`
 - **Format**: `cargo fmt --all`
@@ -42,7 +42,7 @@ requiring Ruby for basic development.
 ## Code Style
 
 - **Rust Edition**: 2024
-- **MSRV**: Latest stable (currently 1.83+)
+- **MSRV**: 1.85+
 - **Formatting**: `rustfmt` defaults
 - **Linting**: `clippy` with default settings, treat warnings as errors in CI
 - **Imports**: Group std → external crates → local modules, separated by blank lines
@@ -113,37 +113,91 @@ this check.
 | `NewValue<T>` | Guard requiring pinning or boxing of new values |
 | `StackPinned<T>` | `!Unpin` wrapper for stack pinning |
 | `BoxValue<T>` | Heap-allocated, GC-registered wrapper |
+| `Context` | Stack storage for method value creation |
 | `Ruby` | Handle to Ruby API (not `Copy`, passed by reference) |
 | `Error` | Ruby exception wrapper |
 
 ## Method Signature Patterns
 
 ```rust
-// Creating values - always returns NewValue
-let guard = RString::new("hello");
+// Context-based method signatures - the modern approach
+// Context provides stack-allocated storage for Ruby values created within methods
 
-// Option 1: Pin on stack (common case)
-let pinned = guard.pin();
-pin_on_stack!(s = pinned);
-// s is Pin<&StackPinned<RString>>
+// Instance method with arity 0 (self only)
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    rb_self: RString,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let name = rb_self.to_string()?;
+    ctx.new_string(&format!("Hello, {}!", name))
+        .map_err(Into::into)
+}
 
-// Option 2: Box for heap (for collections)
+// Instance method with arity 1 (self + one argument)
+fn add(
+    _ctx: &Context,
+    rb_self: RString,
+    other: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
+    let a = rb_self.to_string()?.parse::<i64>()?;
+    let b = other.get().to_string()?.parse::<i64>()?;
+    Ok(a + b)
+}
+
+// Instance method with arity 2 (self + two arguments)
+fn multiply_three(
+    _ctx: &Context,
+    rb_self: RString,
+    arg1: Pin<&StackPinned<RString>>,
+    arg2: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
+    let a = rb_self.to_string()?.parse::<i64>()?;
+    let b = arg1.get().to_string()?.parse::<i64>()?;
+    let c = arg2.get().to_string()?.parse::<i64>()?;
+    Ok(a * b * c)
+}
+
+// Module/global function with arity 0
+fn get_version<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("1.0.0").map_err(Into::into)
+}
+
+// Module/global function with arity 1
+fn to_upper<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let input = s.get().to_string()?;
+    ctx.new_string(&input.to_uppercase()).map_err(Into::into)
+}
+
+// Module/global function with arity 2
+fn join_with<'ctx>(
+    ctx: &'ctx Context,
+    s1: Pin<&StackPinned<RString>>,
+    s2: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let str1 = s1.get().to_string()?;
+    let str2 = s2.get().to_string()?;
+    ctx.new_string(&format!("{} - {}", str1, str2))
+        .map_err(Into::into)
+}
+
+// Creating values using Context
+// Context provides new_string(), new_array(), new_hash(), etc.
+fn example<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let s = ctx.new_string("hello")?;  // Returns Pin<&'ctx StackPinned<RString>>
+    Ok(s)
+}
+
+// For heap storage (collections), use BoxValue
 let boxed = guard.into_box();
 let mut values = vec![boxed];  // Safe!
 
-// Method with pinned argument
-fn example(rb_self: RString, arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
+// Or use Context's boxed methods when no guard is available
+let boxed = ctx.new_string_boxed("hello");  // Returns BoxValue<RString>
 
-// Method with immediate value (no pinning needed)  
-fn example(rb_self: RString, count: i64) -> Result<NewValue<RString>, Error>
-
-// Method with mixed arguments
-fn example(rb_self: RString, count: i64, arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
-
-// Function (no self)
-fn example(arg: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error>
-
-// Using &self for methods (all VALUE methods use &self, not self)
+// Using &self for type methods (all VALUE methods use &self, not self)
 impl RString {
     pub fn len(&self) -> usize;
     pub fn to_string(&self) -> Result<String, Error>;

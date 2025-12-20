@@ -111,7 +111,10 @@ Solidus methods return `Result<T, Error>`, making error propagation natural with
 use solidus::prelude::*;
 use std::pin::Pin;
 
-fn process_string(s: Pin<&StackPinned<RString>>) -> Result<i64, Error> {
+fn process_string<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>,
+) -> Result<i64, Error> {
     // Convert to Rust string - propagates TypeError if conversion fails
     let rust_string = s.get().to_string()?;
     
@@ -150,7 +153,7 @@ fn read_config(path: &str) -> Result<String, Error> {
 ### Common Patterns
 
 ```rust
-use solidus::Error;
+use solidus::{Error, ExceptionClass};
 
 // Parse errors -> ArgumentError
 fn parse_int(s: &str) -> Result<i64, Error> {
@@ -160,7 +163,7 @@ fn parse_int(s: &str) -> Result<i64, Error> {
 // Option -> KeyError
 fn get_required<T>(opt: Option<T>, key: &str) -> Result<T, Error> {
     opt.ok_or_else(|| Error::new(
-        solidus::ExceptionClass::KeyError,
+        ExceptionClass::KeyError,
         format!("required key '{}' not found", key)
     ))
 }
@@ -187,7 +190,7 @@ When a Solidus method returns `Err(error)`, the generated wrapper code:
 ```rust
 use solidus::prelude::*;
 
-fn divide(a: i64, b: i64) -> Result<i64, Error> {
+fn divide<'ctx>(ctx: &'ctx Context, a: i64, b: i64) -> Result<i64, Error> {
     if b == 0 {
         return Err(Error::argument("division by zero"));
     }
@@ -203,7 +206,7 @@ fn divide(a: i64, b: i64) -> Result<i64, Error> {
 Solidus also catches Rust panics and converts them to Ruby exceptions:
 
 ```rust
-fn might_panic() -> Result<i64, Error> {
+fn might_panic<'ctx>(ctx: &'ctx Context) -> Result<i64, Error> {
     panic!("something went terribly wrong");
     // Converted to: RuntimeError: Rust panic: something went terribly wrong
 }
@@ -297,21 +300,21 @@ fn parse_name(name: Pin<&StackPinned<RString>>) -> Result<String, Error> {
 }
 
 /// Creates a greeting for a person, with full error handling.
-fn create_greeting(
+fn create_greeting<'ctx>(
+    ctx: &'ctx Context,
     name: Pin<&StackPinned<RString>>,
     age: i64,
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     // Validate inputs - errors propagate with ?
     let validated_name = parse_name(name)?;
     let validated_age = validate_age(age)?;
     
-    // Create the greeting
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!(
+    // Create the greeting using Context (safe - no unsafe needed)
+    ctx.new_string(&format!(
         "Hello, {}! You are {} years old.",
         validated_name,
         validated_age
-    )) })
+    )).map_err(Into::into)
 }
 ```
 

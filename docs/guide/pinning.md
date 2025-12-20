@@ -44,38 +44,60 @@ The fundamental issue is that VALUE wrapper types in Magnus implement `Copy`, al
 
 ## How Solidus Solves This
 
-Solidus enforces safety at **compile time** through three mechanisms:
+Solidus enforces safety at **compile time** through the `Context` type and pinned references:
 
-### 1. Constructors are `unsafe`
+### The Context Type
 
-Value constructors are marked `unsafe` to prevent accidental storage in collections:
+The `Context` type provides stack-allocated storage slots for Ruby VALUES during method execution. When you create a Ruby value through the Context, it:
 
-```rust
-// This requires unsafe - makes you think about what you're doing
-let s = unsafe { RString::new("hello") };
+1. Allocates the VALUE in one of Context's stack-local slots
+2. Returns a `Pin<&'ctx StackPinned<T>>` reference with lifetime tied to the Context
+3. Ensures the value cannot be moved to the heap or outlive the method call
 
-// Can't accidentally put it in a Vec without explicit unsafe
-let vec = vec![s];  // ERROR: RString is !Copy
-```
+This approach makes safe Ruby value creation ergonomic and enforces safety at compile time.
 
-The `unsafe` requirement ensures you consciously acknowledge the safety requirements
-when creating Ruby values.
+### Stack Storage with Context
 
-### 2. Safe Paths via `pin_on_stack!` and `_boxed` Variants
-
-Solidus provides safe paths that handle the unsafe code internally:
+For most use cases in Ruby methods, use the Context to create values:
 
 ```rust
-// PREFERRED: pin_on_stack! handles unsafe internally
-pin_on_stack!(s = RString::new("hello"));
-// s is Pin<&StackPinned<RString>>, safe to use
+use solidus::prelude::*;
 
-// For heap storage, use the safe _boxed variants
-let boxed = RString::new_boxed("hello");  // Returns BoxValue<RString>
-let mut vec = vec![boxed];  // Safe!
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let name_str = name.get().to_string()?;
+    ctx.new_string(&format!("Hello, {}!", name_str))
+        .map_err(Into::into)
+}
 ```
 
-### 3. All VALUE Types are `!Copy`
+The Context:
+- Provides 8 VALUE slots by default (customizable via const generics)
+- Returns `Pin<&'ctx StackPinned<T>>` which is already pinned and ready to use
+- Prevents the value from being moved to the heap
+- Ties the value's lifetime to the method call's stack frame
+
+### Accessing Values
+
+Values created through Context are returned as `Pin<&'ctx StackPinned<T>>`. Use `.get()` to access the inner value:
+
+```rust
+fn process<'ctx>(
+    ctx: &'ctx Context,
+    input: Pin<&StackPinned<RString>>
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    // Access the inner RString
+    let content = input.get().to_string()?;
+    let processed = content.to_uppercase();
+    
+    // Create and return a new pinned value
+    ctx.new_string(&processed).map_err(Into::into)
+}
+```
+
+### All VALUE Types are `!Copy`
 
 Solidus VALUE wrapper types (`RString`, `RArray`, `RHash`, etc.) do not implement `Copy`. This prevents accidental duplication to heap storage:
 
@@ -84,7 +106,7 @@ let s = unsafe { RString::new("hello") };
 let vec = vec![s];  // ERROR: RString is !Copy
 ```
 
-### 4. Methods Use `&self`
+### Methods Use `&self`
 
 All methods on VALUE types take `&self`, not `self`. This prevents moves of `!Copy` types during method calls:
 
@@ -95,69 +117,33 @@ impl RString {
 }
 ```
 
-## Stack Pinning with `pin_on_stack!`
+## Context Capacity
 
-For most use cases, you want to pin values on the stack. The `pin_on_stack!` macro
-is the **preferred way** to create Ruby values because it handles the unsafe code
-internally:
+By default, Context provides 8 VALUE slots. If you need more, customize the capacity:
 
 ```rust
-use solidus::prelude::*;
+// Default: 8 slots
+fn example<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    ctx.new_string("hello").map_err(Into::into)
+}
 
-// PREFERRED: One-shot creation and pinning (no unsafe needed!)
-pin_on_stack!(s = RString::new("hello"));
-// s is Pin<&StackPinned<RString>>
-
-// Use the value through the pinned reference
-let len = s.get().len();
-let content = s.get().to_string()?;
+// Custom: 16 slots
+fn example_large<'ctx>(ctx: &'ctx Context<16>) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    // Can create up to 16 values
+    ctx.new_string("hello").map_err(Into::into)
+}
 ```
 
-The `pin_on_stack!` macro:
+If slots are exhausted, `ctx.new_xxx()` methods return `Err(AllocationError)`. In practice, 8 slots is sufficient for most methods.
 
-1. Creates the value using the unsafe constructor internally
-2. Wraps the value in `StackPinned<T>` (which is `!Unpin`)
-3. Creates a `Pin<&StackPinned<T>>` reference
-
-Once pinned, the value cannot be moved to the heap.
-
-### Why This is Safe
-
-The `pin_on_stack!` macro is safe because:
-
-1. The value is created and immediately pinned on the stack
-2. The `Pin<&StackPinned<T>>` reference cannot be moved to the heap
-3. The value remains visible to Ruby's GC throughout its lifetime
-
-### Accessing Pinned Values
-
-Use `.get()` to access the inner value:
-
-```rust
-pin_on_stack!(s = RString::new("hello"));
-
-// Get a reference to the inner RString
-let inner: &RString = s.get();
-
-// Call methods on it
-let content = inner.to_string()?;
-```
-
-For mutable access, use the `mut` variant:
-
-```rust
-pin_on_stack!(mut s = RString::new("hello"));
-let inner: &mut RString = s.get_mut();
-```
-
-## Heap Allocation with Safe `_boxed` Variants
+## Heap Allocation with BoxValue
 
 Sometimes you genuinely need to store Ruby values on the heap - in a `Vec`, `HashMap`, or across async boundaries. Solidus provides **safe `_boxed` constructor variants** for this:
 
 ```rust
 use solidus::prelude::*;
 
-// Safe heap storage - no unsafe needed!
+// Safe heap storage
 let boxed = RString::new_boxed("hello");  // Returns BoxValue<RString>
 
 // Now it's safe to store in collections
@@ -165,9 +151,26 @@ let mut strings: Vec<BoxValue<RString>> = Vec::new();
 strings.push(boxed);
 ```
 
+You can also create boxed values through Context:
+
+```rust
+fn build_cache<'ctx>(ctx: &'ctx Context) -> Vec<BoxValue<RString>> {
+    let mut cache = Vec::new();
+    
+    // Using Context's boxed methods
+    cache.push(ctx.new_string_boxed("item1"));
+    cache.push(ctx.new_string_boxed("item2"));
+    
+    // Or using the type's boxed constructor directly
+    cache.push(RString::new_boxed("item3"));
+    
+    cache
+}
+```
+
 ### How BoxValue Works
 
-When you use a `_boxed` variant (like `RString::new_boxed()`):
+When you use a `_boxed` variant:
 
 1. The value is allocated on the heap
 2. `rb_gc_register_address()` is called to tell Ruby's GC about the heap location
@@ -186,23 +189,25 @@ When the `BoxValue` is dropped:
 - GC registration/unregistration
 - Indirect access through a pointer
 
-Prefer `pin_on_stack!` when possible. Use `_boxed` variants only when you need heap storage.
+Prefer Context for method-local values. Use `_boxed` variants only when you need heap storage.
 
 ## When to Use Each Approach
 
-### Use `pin_on_stack!` When:
+### Use Context When:
 
+- Creating values within Ruby methods (most common case)
 - Processing values within a single function
 - Passing values to other functions
 - Returning values to Ruby
-- Most common case
 
 ```rust
-fn process_string(input: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn process_string<'ctx>(
+    ctx: &'ctx Context,
+    input: Pin<&StackPinned<RString>>
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let content = input.get().to_string()?;
     let processed = content.to_uppercase();
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&processed) })
+    ctx.new_string(&processed).map_err(Into::into)
 }
 ```
 
@@ -220,42 +225,57 @@ struct Cache {
 
 impl Cache {
     fn add(&mut self, content: &str) {
-        // Safe! No unsafe needed
         self.strings.push(RString::new_boxed(content));
     }
 }
 ```
 
-### Use Raw `unsafe` Constructors When:
+### Use `pin_on_stack!` When:
 
-- Returning values immediately to Ruby from methods
+- Working outside of Ruby method context (e.g., in tests or initialization)
 - You need fine-grained control over value creation
-- Performance-critical code where you've verified safety
 
 ```rust
-fn greet() -> Result<NewValue<RString>, Error> {
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new("Hello!") })
-}
+// In tests or initialization code
+pin_on_stack!(s = RString::new("hello"));
+// s is Pin<&StackPinned<RString>>
+let len = s.get().len();
 ```
+
+**Note**: Within Ruby methods, prefer using Context over `pin_on_stack!` because Context is more ergonomic and integrates better with method signatures.
 
 ## Method Signatures
 
-When defining Ruby methods in Rust, argument types determine how values are passed:
+When defining Ruby methods in Rust, the Context is always the first parameter:
 
-### Stack-Pinned Arguments
+### Instance Methods
 
-For Ruby objects that need GC protection:
+Instance methods receive Context first, then `self`, then arguments:
 
 ```rust
-fn concat(
+fn concat<'ctx>(
+    ctx: &'ctx Context,
     rb_self: RString,
     other: Pin<&StackPinned<RString>>
-) -> Result<NewValue<RString>, Error> {
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let self_str = rb_self.to_string()?;
     let other_str = other.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("{}{}", self_str, other_str)) })
+    ctx.new_string(&format!("{}{}", self_str, other_str))
+        .map_err(Into::into)
+}
+```
+
+### Functions (No Self)
+
+Functions and class methods receive Context first, then arguments:
+
+```rust
+fn to_upper<'ctx>(
+    ctx: &'ctx Context,
+    s: Pin<&StackPinned<RString>>
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let input = s.get().to_string()?;
+    ctx.new_string(&input.to_uppercase()).map_err(Into::into)
 }
 ```
 
@@ -270,25 +290,29 @@ Some Ruby values are encoded directly in the VALUE pointer and don't need GC pro
 These can be passed directly without pinning:
 
 ```rust
-fn add(a: Fixnum, b: Fixnum) -> i64 {
+fn add(_ctx: &Context, a: Fixnum, b: Fixnum) -> i64 {
     a.to_i64() + b.to_i64()
 }
 ```
 
 ### Return Values
 
-Return `NewValue<T>` for new Ruby objects:
+Return `Pin<&'ctx StackPinned<T>>` for values created through Context:
 
 ```rust
-// Return a new Ruby string
-fn create_greeting(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+fn create_greeting<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let n = name.get().to_string()?;
-    // SAFETY: Value is immediately returned to Ruby
-    Ok(unsafe { RString::new(&format!("Hello, {}!", n)) })
+    ctx.new_string(&format!("Hello, {}!", n)).map_err(Into::into)
 }
+```
 
-// Return an immediate value (no NewValue wrapper needed)
-fn compute_sum(a: Fixnum, b: Fixnum) -> i64 {
+For immediate values, return the raw type:
+
+```rust
+fn compute_sum(_ctx: &Context, a: Fixnum, b: Fixnum) -> i64 {
     a.to_i64() + b.to_i64()
 }
 ```
@@ -297,10 +321,10 @@ fn compute_sum(a: Fixnum, b: Fixnum) -> i64 {
 
 | Mechanism | Purpose | When to Use |
 |-----------|---------|-------------|
-| `unsafe` constructors | Force acknowledgment of safety requirements | Method return values, advanced use |
-| `pin_on_stack!` | Safe stack storage (handles unsafe internally) | **Most cases** - local processing |
+| `Context` | Stack-allocated VALUE slots | **Most cases** - creating values in Ruby methods |
+| `Pin<&'ctx StackPinned<T>>` | Safe reference to stack value | Return type from Context methods |
 | `_boxed` variants | Safe heap storage | Collections, caching, TypedData |
 | `!Copy` types | Prevent accidental heap moves | Automatic - all VALUE types |
-| `NewValue<T>` | Mark values returned to Ruby | Method return types |
+| `pin_on_stack!` | Manual stack pinning | Tests, initialization, outside method context |
 
-Solidus shifts the burden from "remember the rules" to "the compiler enforces the rules". The safe paths (`pin_on_stack!` and `_boxed` variants) make correct code easy to write, while `unsafe` constructors are available when you need more control.
+Solidus shifts the burden from "remember the rules" to "the compiler enforces the rules". The Context type makes safe Ruby value creation ergonomic and natural, while the type system prevents unsafe patterns at compile time.

@@ -42,14 +42,14 @@ fn greet<'ctx>(
 
 // For heap storage (Vec, HashMap), use BoxValue via *_boxed() methods
 let boxed = RString::new_boxed("hello");  // GC-registered
-let mut values = vec![boxed];  // Safe!
+let mut values: Vec<BoxValue<RString>> = vec![boxed];  // Safe!
 ```
 
 ## Quick Start
 
 ### Using Context (Recommended)
 
-The `Context` type provides safe stack-allocated slots for Ruby values. Methods defined with `method!` or `function!` macros automatically receive a `&Context`:
+The `Context` type provides safe stack-allocated slots for Ruby values. Methods defined with `method!` or `function!` declarative macros automatically inject a `&Context` as the first parameter:
 
 ```rust
 use solidus::prelude::*;
@@ -74,19 +74,20 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
 
 ### Using BoxValue (Simple Cases)
 
-For simple functions that just return a value, `BoxValue<T>` is convenient:
+For simple functions that just return a value, `BoxValue<T>` is convenient. When using the `#[solidus_macros::function]` or `#[solidus_macros::method]` attribute macros, the Context parameter is handled automatically:
 
 ```rust
 use solidus::prelude::*;
 
 /// Return a greeting - BoxValue handles GC registration automatically
-fn hello(_ctx: &Context) -> Result<BoxValue<RString>, Error> {
+#[solidus_macros::function]
+fn hello() -> Result<BoxValue<RString>, Error> {
     Ok(RString::new_boxed("Hello from Solidus!"))
 }
 
 #[solidus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
-    ruby.define_global_function("hello", solidus::function!(hello, 0), 0)?;
+    ruby.define_global_function("hello", __solidus_function_hello::wrapper(), __solidus_function_hello::ARITY)?;
     Ok(())
 }
 ```
@@ -104,7 +105,9 @@ puts hello()         # => "Hello from Solidus!"
 `Context` is central to Solidus's safety model. It provides stack-allocated slots where Ruby values can live safely during a method call.
 
 **Key points:**
-- `method!` and `function!` macros inject `&Context` as the first parameter
+- `method!` and `function!` declarative macros inject `&Context` as the first parameter
+- Attribute macros (`#[solidus_macros::method]`, `#[solidus_macros::function]`) handle Context automatically without requiring an explicit parameter
+- `Context` provides 8 VALUE slots by default, customizable via const generic: `Context<'a, 16>`
 - Use `ctx.new_string()`, `ctx.new_array()`, `ctx.new_hash()` to create values
 - Values have lifetime `'ctx` - they cannot outlive the method call
 - For heap storage (collections), use `BoxValue<T>` via `*_boxed()` methods
@@ -115,8 +118,8 @@ fn process<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RArray>>, E
     let s1 = ctx.new_string("hello")?;
     let s2 = ctx.new_string("world")?;
     // All three values are in Context's stack slots - GC can see them
-    arr.get().push(s1.get().clone());
-    arr.get().push(s2.get().clone());
+    arr.get().push(s1.get().as_value());
+    arr.get().push(s2.get().as_value());
     Ok(arr)
 }
 ```
@@ -162,6 +165,7 @@ rb-sys-build = "0.9"
 
 ```rust
 fn main() {
+    // Get Ruby configuration and set up linking
     let rb_config = rb_sys_build::RbConfig::current();
     rb_config.print_cargo_args();
 }
@@ -217,13 +221,13 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 
 ### Key Macros
 
-| Macro | Purpose |
-|-------|---------|
-| `#[solidus::init]` | Generates extension entry point |
-| `solidus::method!(fn, arity)` | Creates wrapper for instance methods |
-| `solidus::function!(fn, arity)` | Creates wrapper for functions/class methods |
-| `#[solidus_macros::method]` | Attribute macro alternative for methods |
-| `#[solidus_macros::function]` | Attribute macro alternative for functions |
+| Macro | Type | Purpose |
+|-------|------|---------|
+| `#[solidus::init]` | Attribute | Generates extension entry point |
+| `solidus::method!(fn, arity)` | Declarative | Creates wrapper for instance methods (injects Context) |
+| `solidus::function!(fn, arity)` | Declarative | Creates wrapper for functions/class methods (injects Context) |
+| `#[solidus_macros::method]` | Attribute | Alternative for methods (handles Context automatically) |
+| `#[solidus_macros::function]` | Attribute | Alternative for functions (handles Context automatically) |
 
 ### Modules
 
