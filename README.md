@@ -1,6 +1,6 @@
 # Solidus
 
-A safe Rust library for writing Ruby extensions with automatic stack pinning.
+A safe Rust library for writing Ruby extensions with compile-time GC safety.
 
 [![CI](https://github.com/ekroon/solidus/actions/workflows/ci.yml/badge.svg)](https://github.com/ekroon/solidus/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/solidus.svg)](https://crates.io/crates/solidus)
@@ -9,59 +9,84 @@ A safe Rust library for writing Ruby extensions with automatic stack pinning.
 
 ## The Problem
 
-When writing Ruby extensions in Rust, Ruby values must stay on the stack so Ruby's garbage collector can find them. In other libraries like Magnus, accidentally moving values to the heap is undefined behavior:
+When writing Ruby extensions in Rust, Ruby values must stay visible to the garbage collector. Ruby's GC uses conservative stack scanning - it only looks at the C stack to find live VALUE references. In other libraries like Magnus, accidentally moving values to the heap causes undefined behavior:
 
 ```rust
-// This is UB in Magnus - values moved to heap, invisible to Ruby GC
-let values: Vec<Value> = vec![ruby.str_new("hello")];
+// In Magnus, this compiles but is UB - values on heap, invisible to Ruby GC
+let values: Vec<RString> = vec![ruby.str_new("hello")];
 ```
 
-This is error-prone, not enforced by the type system, and not visible at the API level. See [Magnus issue #101](https://github.com/matsadler/magnus/issues/101) for details.
+This is error-prone, not enforced by the type system, and can lead to use-after-free bugs. See [Magnus issue #101](https://github.com/matsadler/magnus/issues/101) for details.
 
 ## The Solution
 
-Solidus uses Rust's type system to enforce stack locality at compile time through **pinned-from-creation**:
+Solidus enforces safety at compile time through three mechanisms:
 
-1. **All VALUE types are `!Copy`** - Cannot be accidentally copied to heap
-2. **Creation returns `NewValue<T>`** - Must explicitly choose stack or heap storage
-3. **Compile-time enforcement** - Cannot forget to pin or box a value
-
-```rust
-use solidus::prelude::*;
-
-// Creating a value returns a NewValue
-let guard = RString::new("hello");
-
-// Option 1: Pin on stack (common case)
-let pinned = guard.pin();
-pin_on_stack!(s = pinned);
-// s is Pin<&StackPinned<RString>>, cannot be moved to heap
-
-// Option 2: Box for heap storage (for collections)
-let guard = RArray::new();
-let boxed = guard.into_box();     // Explicit GC registration
-let mut values = vec![boxed];     // Safe! GC knows about it
-```
-
-## Quick Start
-
-Here's a complete example showing how to create a Ruby extension with Solidus:
+1. **All VALUE types are `!Copy`** - Cannot be accidentally duplicated to heap
+2. **Context for stack allocation** - Methods receive a `Context` with GC-visible stack slots
+3. **Explicit heap registration** - `BoxValue<T>` for when heap storage is needed
 
 ```rust
 use solidus::prelude::*;
 use std::pin::Pin;
 
-/// A function that greets someone by name
-fn greet(name: Pin<&StackPinned<RString>>) -> Result<NewValue<RString>, Error> {
+// Methods receive &Context as first parameter (injected by macros)
+// Create values using ctx.new_*() - they live in stack slots visible to GC
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
     let name_str = name.get().to_string()?;
-    Ok(RString::new(&format!("Hello, {}!", name_str)))
+    ctx.new_string(&format!("Hello, {}!", name_str)).map_err(Into::into)
 }
 
-/// Initialize the extension - called when Ruby loads the library
+// For heap storage (Vec, HashMap), use BoxValue via *_boxed() methods
+let boxed = RString::new_boxed("hello");  // GC-registered
+let mut values = vec![boxed];  // Safe!
+```
+
+## Quick Start
+
+### Using Context (Recommended)
+
+The `Context` type provides safe stack-allocated slots for Ruby values. Methods defined with `method!` or `function!` macros automatically receive a `&Context`:
+
+```rust
+use solidus::prelude::*;
+use std::pin::Pin;
+
+/// Greet someone by name
+fn greet<'ctx>(
+    ctx: &'ctx Context,
+    name: Pin<&StackPinned<RString>>,
+) -> Result<Pin<&'ctx StackPinned<RString>>, Error> {
+    let name_str = name.get().to_string()?;
+    ctx.new_string(&format!("Hello, {}!", name_str)).map_err(Into::into)
+}
+
+/// Initialize the extension
 #[solidus::init]
 fn init(ruby: &Ruby) -> Result<(), Error> {
-    // Register a global function callable from Ruby
     ruby.define_global_function("greet", solidus::function!(greet, 1), 1)?;
+    Ok(())
+}
+```
+
+### Using BoxValue (Simple Cases)
+
+For simple functions that just return a value, `BoxValue<T>` is convenient:
+
+```rust
+use solidus::prelude::*;
+
+/// Return a greeting - BoxValue handles GC registration automatically
+fn hello(_ctx: &Context) -> Result<BoxValue<RString>, Error> {
+    Ok(RString::new_boxed("Hello from Solidus!"))
+}
+
+#[solidus::init]
+fn init(ruby: &Ruby) -> Result<(), Error> {
+    ruby.define_global_function("hello", solidus::function!(hello, 0), 0)?;
     Ok(())
 }
 ```
@@ -71,7 +96,32 @@ Then in Ruby:
 ```ruby
 require 'my_extension'
 puts greet("World")  # => "Hello, World!"
+puts hello()         # => "Hello from Solidus!"
 ```
+
+## Understanding Context
+
+`Context` is central to Solidus's safety model. It provides stack-allocated slots where Ruby values can live safely during a method call.
+
+**Key points:**
+- `method!` and `function!` macros inject `&Context` as the first parameter
+- Use `ctx.new_string()`, `ctx.new_array()`, `ctx.new_hash()` to create values
+- Values have lifetime `'ctx` - they cannot outlive the method call
+- For heap storage (collections), use `BoxValue<T>` via `*_boxed()` methods
+
+```rust
+fn process<'ctx>(ctx: &'ctx Context) -> Result<Pin<&'ctx StackPinned<RArray>>, Error> {
+    let arr = ctx.new_array()?;
+    let s1 = ctx.new_string("hello")?;
+    let s2 = ctx.new_string("world")?;
+    // All three values are in Context's stack slots - GC can see them
+    arr.get().push(s1.get().clone());
+    arr.get().push(s2.get().clone());
+    Ok(arr)
+}
+```
+
+For more details, see [Pinning](docs/guide/pinning.md) and [BoxValue](docs/guide/boxvalue.md).
 
 ## Installation
 
@@ -132,8 +182,8 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 
 ## Key Features
 
-- **Safety by default**: Ruby values must be pinned from creation - enforced at compile time
-- **Clear API**: `NewValue<T>` with `#[must_use]` makes requirements explicit
+- **Safety by default**: Ruby values are created in GC-visible locations - enforced at compile time
+- **Clear API**: `Context` for stack values, `BoxValue<T>` for heap - explicit and safe
 - **Zero-cost abstractions**: All safety checks are compile-time only
 - **Immediate values optimized**: `Fixnum`, `Symbol`, `true`, `false`, `nil` remain `Copy`
 - **Prevents Magnus-style UB**: Compiler enforces what Magnus only documents
@@ -145,7 +195,7 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 | Type | Description |
 |------|-------------|
 | `Value` | Base wrapper around Ruby's VALUE (`!Copy`) |
-| `NewValue<T>` | Guard enforcing pinning or boxing of new values |
+| `Context` | Stack-allocated slots for creating values in methods |
 | `StackPinned<T>` | `!Unpin` wrapper for stack-pinned values |
 | `BoxValue<T>` | Heap-allocated, GC-registered wrapper |
 | `Ruby` | Handle to the Ruby VM |
@@ -172,11 +222,13 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 | `#[solidus::init]` | Generates extension entry point |
 | `solidus::method!(fn, arity)` | Creates wrapper for instance methods |
 | `solidus::function!(fn, arity)` | Creates wrapper for functions/class methods |
-| `pin_on_stack!(var = guard)` | Pins a value on the stack |
+| `#[solidus_macros::method]` | Attribute macro alternative for methods |
+| `#[solidus_macros::function]` | Attribute macro alternative for functions |
 
 ### Modules
 
 - `solidus::prelude` - Common imports for convenience
+- `solidus::context` - Context for creating values in methods
 - `solidus::types` - Ruby type wrappers
 - `solidus::convert` - Type conversion traits (`TryConvert`, `IntoValue`)
 - `solidus::typed_data` - Wrap Rust structs as Ruby objects
@@ -188,7 +240,7 @@ ruby -e "require_relative 'target/debug/my_extension'; puts greet('World')"
 |--------|--------|---------|
 | Heap safety | Documentation only | Compile-time enforced |
 | VALUE types | `Copy` | `!Copy` |
-| Value creation | Returns value directly | Returns `NewValue<T>` |
+| Value creation | Returns value directly | Via `Context` or `*_boxed()` methods |
 | Heap storage | Unsafe, UB if forgotten | Explicit `BoxValue<T>` with GC registration |
 | Immediate values | `Copy` | `Copy` (same) |
 | Runtime overhead | None | None (compile-time only) |
